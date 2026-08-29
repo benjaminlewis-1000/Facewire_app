@@ -7,6 +7,16 @@ import IgnoreReviewScreen from './IgnoreReviewScreen';
 import VerifyPeopleScreen from './VerifyPeopleScreen';
 import VerifyIgnoreScreen from './VerifyIgnoreScreen';
 import SettingsScreen from './SettingsScreen';
+import ScreenToast from './ScreenToast';
+
+// "You're now on X" cue shown for 2s whenever the screen changes.
+const SCREEN_TOAST = {
+  label: 'Labeling faces',
+  verify_people: 'Verify people',
+  verify_ignore: 'Verifying ignored faces',
+  ignore_review: 'Confirming ignored faces',
+  settings: 'Settings',
+};
 import { authedFetch, signOut, lockSession, getValidIdToken, API_BASE } from './auth';
 import { firstCheckIndex, pruneAndLocate, frontierAfterRemoval } from './queueLogic';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -1292,6 +1302,9 @@ export default function App() {
           onChangeIgnorePages={updateIgnorePages}
         />
       )}
+
+      {/* "Now on X" cue on every screen change */}
+      <ScreenToast trigger={screen} title={SCREEN_TOAST[screen]} />
 
       {/* Hamburger button -- rendered last so it stays above every screen */}
       <TouchableOpacity

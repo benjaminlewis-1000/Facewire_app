@@ -22,8 +22,8 @@ export const CHIP_SIZE = Math.floor(
 // chrome; no scroll. These heights are identical on every grid screen so
 // the first photo lands at the same spot regardless of which one you're
 // on. Generous top (status bar) + bottom (Android nav bar) padding.
-// paddingTop 56 + header 40 + meta 34 + hint 20 + footer ~96 + slack.
-const CHROME = 56 + 40 + 34 + 20 + 96 + 6;
+// paddingTop 56 + header 40 + meta 34 + hint 20 + footer ~118 + slack.
+const CHROME = 56 + 40 + 34 + 20 + 118 + 6;
 export const ROWS = Math.max(
   2,
   Math.min(8, Math.floor((height - CHROME) / (CHIP_SIZE + GRID_GAP)))
@@ -215,7 +215,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 4,
   },
-  footer: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40 },
+  footer: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 60 },
   submitButton: {
     paddingVertical: 15,
     borderRadius: 12,
