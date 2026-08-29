@@ -46,13 +46,3 @@ export function frontierAfterRemoval(frontierIndex, removeIndex, newLength) {
   const shifted = frontierIndex > removeIndex ? frontierIndex - 1 : frontierIndex;
   return Math.min(shifted, newLength);
 }
-
-/**
- * IgnoreReviewScreen's next-fetch offset. The server list shrinks by
- * `removedCount` (our confirms + hides); our still-unconsumed look-ahead
- * sits at the front, so the first not-yet-fetched face is now at
- * `fetchedCount - removedCount`.
- */
-export function nextIgnoreOffset(fetchedCount, removedCount) {
-  return Math.max(0, fetchedCount - removedCount);
-}

@@ -2,7 +2,6 @@ import {
   firstCheckIndex,
   pruneAndLocate,
   frontierAfterRemoval,
-  nextIgnoreOffset,
 } from '../queueLogic';
 
 describe('firstCheckIndex', () => {
@@ -76,19 +75,5 @@ describe('frontierAfterRemoval', () => {
   });
   test('reset the very first past face', () => {
     expect(frontierAfterRemoval(1, 0, 3)).toBe(0);
-  });
-});
-
-describe('nextIgnoreOffset', () => {
-  test('nothing removed yet: offset == what we have', () => {
-    expect(nextIgnoreOffset(24, 0)).toBe(24);
-  });
-  test('one 12-face batch confirmed: offset accounts for the shrink', () => {
-    // fetched 36, removed 12 -> the unconsumed 12 are at the front,
-    // face #36 is now at server index 24
-    expect(nextIgnoreOffset(36, 12)).toBe(24);
-  });
-  test('never negative', () => {
-    expect(nextIgnoreOffset(10, 50)).toBe(0);
   });
 });

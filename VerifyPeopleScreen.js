@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Image, Modal } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, Modal } from 'react-native';
 
 import { authedFetch, API_BASE } from './auth';
 import ReviewGrid, { PAGE_LIMIT } from './ReviewGrid';
+import useReviewQueue from './useReviewQueue';
 
 /**
  * Verify unconfirmed assignments for one *named* person at a time, biggest
@@ -13,10 +14,6 @@ import ReviewGrid, { PAGE_LIMIT } from './ReviewGrid';
  */
 const VerifyPeopleScreen = ({ visible, onClose }) => {
   const [person, setPerson] = useState(null); // { id, name, count }
-  const [faces, setFaces] = useState([]);
-  const [excluded, setExcluded] = useState(() => new Set());
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [popupName, setPopupName] = useState('');
 
   const excludeIdsRef = useRef(new Set()); // person ids skipped this session
@@ -29,95 +26,58 @@ const VerifyPeopleScreen = ({ visible, onClose }) => {
     popupTimer.current = setTimeout(() => setPopupName(''), 2000);
   }, []);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    setExcluded(new Set());
-    try {
-      const exclude = [...excludeIdsRef.current].join(',');
-      const resp = await authedFetch(
-        `${API_BASE}/mobile/verify_candidates/?limit=${PAGE_LIMIT}&exclude=${exclude}`
-      );
-      if (resp.networkError) throw new Error('network');
-      if (!resp.ok) throw new Error(`status ${resp.status}`);
-      const data = await resp.json();
-      const list = Array.isArray(data.faces) ? data.faces : [];
-      list.forEach((f) => Image.prefetch(f.face_img_url));
-      if (!data.person_id || list.length === 0) {
-        setPerson(null);
-        setFaces([]);
-        return;
+  const fetchPage = useCallback(async () => {
+    const exclude = [...excludeIdsRef.current].join(',');
+    const resp = await authedFetch(
+      `${API_BASE}/mobile/verify_candidates/?limit=${PAGE_LIMIT}&exclude=${exclude}`
+    );
+    if (resp.networkError) throw new Error('network');
+    if (!resp.ok) throw new Error(`status ${resp.status}`);
+    const data = await resp.json();
+    const faces = Array.isArray(data.faces) ? data.faces : [];
+    if (!data.person_id || faces.length === 0) return { faces: [], meta: null };
+    return {
+      faces,
+      meta: { id: data.person_id, name: data.person_name, count: data.unverified_count },
+    };
+  }, []);
+
+  const handlePage = useCallback(
+    (meta) => {
+      setPerson(meta);
+      if (meta && meta.id !== lastPersonIdRef.current) {
+        lastPersonIdRef.current = meta.id;
+        showPopup(meta.name);
       }
-      setPerson({
-        id: data.person_id,
-        name: data.person_name,
-        count: data.unverified_count,
-      });
-      setFaces(list);
-      if (data.person_id !== lastPersonIdRef.current) {
-        lastPersonIdRef.current = data.person_id;
-        showPopup(data.person_name);
-      }
-    } catch (e) {
-      console.warn('verify_candidates load failed:', e);
-      setError(
-        e.message === 'network'
-          ? 'No connection — check your network, then reopen this screen.'
-          : 'Could not load faces to verify. Reopen to try again.'
-      );
-      setFaces([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [showPopup]);
+    },
+    [showPopup]
+  );
+
+  const q = useReviewQueue({
+    visible,
+    fetchPage,
+    onPage: handlePage,
+    submitUrl: `${API_BASE}/mobile/bulk_verify/`,
+    buildBody: (verify_ids, reset_ids) => ({ verify_ids, reset_ids }),
+  });
 
   useEffect(() => {
     if (visible) {
       excludeIdsRef.current = new Set();
       lastPersonIdRef.current = null;
-      load();
     }
     return () => {
       if (popupTimer.current) clearTimeout(popupTimer.current);
     };
-  }, [visible, load]);
-
-  const toggle = (id) => {
-    setExcluded((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  };
+  }, [visible]);
 
   const skipPerson = () => {
     if (person) excludeIdsRef.current.add(person.id);
-    load();
+    q.reload();
   };
 
-  const submit = () => {
-    if (loading || faces.length === 0) return;
-    const verify_ids = faces.filter((f) => !excluded.has(f.id)).map((f) => f.id);
-    const reset_ids = faces.filter((f) => excluded.has(f.id)).map((f) => f.id);
-
-    authedFetch(`${API_BASE}/mobile/bulk_verify/`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ verify_ids, reset_ids }),
-    })
-      .then((resp) => {
-        if (!resp.ok) setError("Couldn't save that batch — reopen to retry.");
-      })
-      .catch((e) => {
-        console.warn('bulk_verify failed:', e);
-        setError("Couldn't save that batch — reopen to retry.");
-      });
-
-    load();
-  };
-
-  const verifyCount = faces.filter((f) => !excluded.has(f.id)).length;
-  const resetCount = faces.length - verifyCount;
+  const resetCount = q.faces.filter((f) => q.excluded.has(f.id)).length;
+  const verifyCount = q.faces.length - resetCount;
   const submitLabel =
     verifyCount > 0
       ? `Verify ${verifyCount}` + (resetCount ? `  ·  reset ${resetCount}` : '')
@@ -145,14 +105,14 @@ const VerifyPeopleScreen = ({ visible, onClose }) => {
         title="Verify people"
         hint="Tap any face that's the wrong person — it goes back to the unassigned pool. The rest are confirmed."
         subHeader={subHeader}
-        faces={faces}
-        excluded={excluded}
-        onToggle={toggle}
-        loading={loading}
-        error={error}
-        emptyBody={error || 'No unverified faces for any named person.'}
+        faces={q.faces}
+        excluded={q.excluded}
+        onToggle={q.toggle}
+        loading={q.loading}
+        error={q.error}
+        emptyBody={q.error || 'No unverified faces for any named person.'}
         submitLabel={submitLabel}
-        onSubmit={submit}
+        onSubmit={q.submit}
         accent="#2E7D32"
       />
       <Modal visible={!!popupName} transparent animationType="fade">
