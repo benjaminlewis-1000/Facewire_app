@@ -26,7 +26,7 @@ const VerifyPeopleScreen = ({ visible, onClose }) => {
   const pinnedPersonIdRef = useRef(null); // stay on this person until exhausted
   const currentPersonIdRef = useRef(null); // whose count `remaining` reflects
 
-  const fetchPage = useCallback(async () => {
+  const fetchPage = useCallback(async (seen) => {
     const exclude = [...excludeIdsRef.current].join(',');
     const pin = pinnedPersonIdRef.current ? `&person_id=${pinnedPersonIdRef.current}` : '';
     const resp = await authedFetch(
@@ -36,9 +36,15 @@ const VerifyPeopleScreen = ({ visible, onClose }) => {
     if (!resp.ok) throw new Error(`status ${resp.status}`);
     const data = await resp.json();
     const all = Array.isArray(data.faces) ? data.faces : [];
-    if (!data.person_id || all.length === 0) return { faces: [], meta: null };
+    // Drop faces already shown this session -- the optimistic submit
+    // advances before the PATCH lands, so a just-verified face could
+    // otherwise come back in the next random sample.
+    const fresh = all.filter((f) => !seen.has(f.id));
+    // No person, or this person's reachable pool is used up -> meta:null
+    // so the pin clears and we move on to the next pile.
+    if (!data.person_id || fresh.length === 0) return { faces: [], meta: null };
     return {
-      faces: all,
+      faces: fresh,
       meta: { id: data.person_id, name: data.person_name, count: data.unverified_count },
     };
   }, []);

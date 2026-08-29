@@ -46,6 +46,7 @@ export default function useReviewQueue({
   const seen = useRef(new Set());
   const bufferRef = useRef([]);
   const inFlightRef = useRef(null);
+  const submitLockRef = useRef(false);
 
   // Pull one batch from the screen and append the genuinely-new faces to
   // the buffer. Returns how many were added.
@@ -131,44 +132,47 @@ export default function useReviewQueue({
     });
   }, []);
 
+  // Optimistic: fire the PATCH and advance to the next (buffered) page
+  // immediately -- don't wait for the write. A failed write surfaces a
+  // dismissible banner; the already-shown faces are in `seen` so they
+  // won't cycle back. Returns true once the advance has kicked off.
   const submit = useCallback(async () => {
-    if (busy || loading || faces.length === 0) return false;
-    const keep = faces.filter((f) => !excluded.has(f.id)).map((f) => f.id);
-    const flag = faces.filter((f) => excluded.has(f.id)).map((f) => f.id);
-    const consumed = faces.length;
-
-    setBusy(true);
-    let ok = false;
+    if (submitLockRef.current || loading || faces.length === 0) return false;
+    submitLockRef.current = true;
     try {
-      const resp = await authedFetch(submitUrl, {
+      const keep = faces.filter((f) => !excluded.has(f.id)).map((f) => f.id);
+      const flag = faces.filter((f) => excluded.has(f.id)).map((f) => f.id);
+      const consumed = faces.length;
+
+      authedFetch(submitUrl, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(buildBody(keep, flag)),
-      });
-      ok = resp.ok;
-    } catch (e) {
-      console.warn('review submit failed:', e);
-    }
-    if (!ok) {
-      setError("Couldn't save that batch — try again.");
-      setBusy(false);
-      return false;
-    }
+      })
+        .then((resp) => {
+          if (!resp.ok) setError("Couldn't save that batch — it may need redoing.");
+        })
+        .catch((e) => {
+          console.warn('review submit failed:', e);
+          setError("Couldn't save that batch — it may need redoing.");
+        });
 
-    bufferRef.current = bufferRef.current.slice(consumed);
-    if (bufferRef.current.length === 0) {
-      // Nothing buffered (e.g. moved past this person) -> real fetch.
-      setLoading(true);
-      await fill(page);
-      showWindow();
-      setLoading(false);
-    } else {
-      showWindow(); // instant
-      if (bufferRef.current.length < page * 2) fill(page * 2); // bg
+      bufferRef.current = bufferRef.current.slice(consumed);
+      if (bufferRef.current.length === 0) {
+        // Nothing buffered (e.g. moved past this person) -> must fetch.
+        setBusy(true);
+        await fill(page);
+        showWindow();
+        setBusy(false);
+      } else {
+        showWindow(); // instant
+        if (bufferRef.current.length < page * 2) fill(page * 2); // bg top-up
+      }
+      return true;
+    } finally {
+      submitLockRef.current = false;
     }
-    setBusy(false);
-    return true;
-  }, [busy, loading, faces, excluded, buildBody, submitUrl, fill, showWindow, page]);
+  }, [loading, faces, excluded, buildBody, submitUrl, fill, showWindow, page]);
 
   return { faces, excluded, toggle, loading, busy, error, submit, reload: load, setError };
 }

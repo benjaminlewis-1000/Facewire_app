@@ -172,7 +172,7 @@ const ReviewGrid = ({
             disabled={busy}
           >
             <Text style={styles.submitButtonText}>
-              {busy ? 'Saving…' : submitLabel}
+              {busy ? '…' : submitLabel}
             </Text>
           </TouchableOpacity>
         </View>
