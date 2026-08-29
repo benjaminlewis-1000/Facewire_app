@@ -13,12 +13,13 @@ import useReviewQueue from './useReviewQueue';
  * session and jumps to the next-biggest pile.
  */
 const VerifyPeopleScreen = ({ visible, onClose }) => {
-  const [person, setPerson] = useState(null); // { id, name, count }
+  const [person, setPerson] = useState(null); // { id, name }
+  const [remaining, setRemaining] = useState(null); // locally-tracked count
   const [popupName, setPopupName] = useState('');
 
   const excludeIdsRef = useRef(new Set()); // person ids skipped this session
   const pinnedPersonIdRef = useRef(null); // stay on this person until exhausted
-  const lastPersonIdRef = useRef(null);
+  const currentPersonIdRef = useRef(null); // whose count `remaining` reflects
   const popupTimer = useRef(null);
 
   const showPopup = useCallback((name) => {
@@ -50,8 +51,12 @@ const VerifyPeopleScreen = ({ visible, onClose }) => {
       // Pin the server to this person for subsequent loads; null => the
       // queue is exhausted.
       pinnedPersonIdRef.current = meta ? meta.id : null;
-      if (meta && meta.id !== lastPersonIdRef.current) {
-        lastPersonIdRef.current = meta.id;
+      if (meta && meta.id !== currentPersonIdRef.current) {
+        // Landed on a new person: latch their count from the server (only
+        // sent on this first, unpinned load). From here we track it
+        // locally -- see onSubmit -- so there's no COUNT query per screen.
+        currentPersonIdRef.current = meta.id;
+        setRemaining(typeof meta.count === 'number' ? meta.count : null);
         showPopup(meta.name);
       }
     },
@@ -66,21 +71,32 @@ const VerifyPeopleScreen = ({ visible, onClose }) => {
     buildBody: (verify_ids, reset_ids) => ({ verify_ids, reset_ids }),
   });
 
-  useEffect(() => {
-    if (visible) {
-      excludeIdsRef.current = new Set();
-      pinnedPersonIdRef.current = null;
-      lastPersonIdRef.current = null;
-    }
-    return () => {
+  // The screen mounts fresh each time it's opened, so refs start clean --
+  // no reset needed here (an earlier version reset them in this effect and
+  // clobbered the just-latched count).
+  useEffect(
+    () => () => {
       if (popupTimer.current) clearTimeout(popupTimer.current);
-    };
-  }, [visible]);
+    },
+    []
+  );
 
   const skipPerson = () => {
     if (person) excludeIdsRef.current.add(person.id);
     pinnedPersonIdRef.current = null; // let the server pick the next pile
+    currentPersonIdRef.current = null; // re-latch the count for the next person
     q.reload();
+  };
+
+  // Every face on the grid leaves this person's unverified pile on submit
+  // (verified -> validated, reset -> off the person), so drop the local
+  // count by the screenful -- but only once the write has actually landed.
+  const onSubmit = async () => {
+    const leaving = q.faces.length;
+    const ok = await q.submit();
+    if (ok) {
+      setRemaining((r) => (typeof r === 'number' ? Math.max(0, r - leaving) : r));
+    }
   };
 
   const resetCount = q.faces.filter((f) => q.excluded.has(f.id)).length;
@@ -97,7 +113,7 @@ const VerifyPeopleScreen = ({ visible, onClose }) => {
           {person.name}
         </Text>
         <Text style={styles.personCount}>
-          {typeof person.count === 'number' ? `${person.count} unverified` : 'unverified'}
+          {typeof remaining === 'number' ? `~${remaining} unverified` : 'unverified'}
         </Text>
       </View>
       <TouchableOpacity onPress={skipPerson} hitSlop={10} style={styles.skipBtn}>
@@ -121,7 +137,7 @@ const VerifyPeopleScreen = ({ visible, onClose }) => {
         error={q.error}
         emptyBody={q.error || 'No unverified faces for any named person.'}
         submitLabel={submitLabel}
-        onSubmit={q.submit}
+        onSubmit={onSubmit}
         accent="#2E7D32"
       />
       <Modal visible={!!popupName} transparent animationType="fade">

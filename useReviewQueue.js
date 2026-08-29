@@ -72,8 +72,11 @@ export default function useReviewQueue({ visible, fetchPage, buildBody, submitUr
     });
   }, []);
 
+  // Returns true once the write has landed (and the reload kicked off),
+  // false if it failed. Callers that keep their own running totals should
+  // only advance them on true.
   const submit = useCallback(async () => {
-    if (loading || faces.length === 0) return;
+    if (loading || faces.length === 0) return false;
     const keep = faces.filter((f) => !excluded.has(f.id)).map((f) => f.id);
     const flag = faces.filter((f) => excluded.has(f.id)).map((f) => f.id);
 
@@ -92,10 +95,11 @@ export default function useReviewQueue({ visible, fetchPage, buildBody, submitUr
     if (!ok) {
       setError("Couldn't save that batch — try again.");
       setLoading(false);
-      return;
+      return false;
     }
     // Write landed -> the reload's page + counts now reflect it.
     load();
+    return true;
   }, [faces, excluded, loading, buildBody, submitUrl, load]);
 
   return { faces, excluded, toggle, loading, error, submit, reload: load, setError };
