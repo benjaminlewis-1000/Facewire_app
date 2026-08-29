@@ -1,9 +1,14 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Modal } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, Modal, Image } from 'react-native';
 
 import { authedFetch, API_BASE } from './auth';
 import ReviewGrid, { PAGE_LIMIT } from './ReviewGrid';
 import useReviewQueue from './useReviewQueue';
+
+// Over-fetch this many screenfuls so the images for upcoming pages are
+// already warm by the time you submit the current one.
+const PAGES_AHEAD = 2;
+const FETCH_LIMIT = Math.min(120, PAGE_LIMIT * (1 + PAGES_AHEAD));
 
 /**
  * Verify unconfirmed assignments for one *named* person at a time, biggest
@@ -32,15 +37,17 @@ const VerifyPeopleScreen = ({ visible, onClose }) => {
     const exclude = [...excludeIdsRef.current].join(',');
     const pin = pinnedPersonIdRef.current ? `&person_id=${pinnedPersonIdRef.current}` : '';
     const resp = await authedFetch(
-      `${API_BASE}/mobile/verify_candidates/?limit=${PAGE_LIMIT}&exclude=${exclude}${pin}`
+      `${API_BASE}/mobile/verify_candidates/?limit=${FETCH_LIMIT}&exclude=${exclude}${pin}`
     );
     if (resp.networkError) throw new Error('network');
     if (!resp.ok) throw new Error(`status ${resp.status}`);
     const data = await resp.json();
-    const faces = Array.isArray(data.faces) ? data.faces : [];
-    if (!data.person_id || faces.length === 0) return { faces: [], meta: null };
+    const all = Array.isArray(data.faces) ? data.faces : [];
+    if (!data.person_id || all.length === 0) return { faces: [], meta: null };
+    // Warm the images for the pages beyond this screenful.
+    all.slice(PAGE_LIMIT).forEach((f) => Image.prefetch(f.face_img_url));
     return {
-      faces,
+      faces: all.slice(0, PAGE_LIMIT),
       meta: { id: data.person_id, name: data.person_name, count: data.unverified_count },
     };
   }, []);
@@ -126,7 +133,7 @@ const VerifyPeopleScreen = ({ visible, onClose }) => {
       <ReviewGrid
         visible={visible}
         onClose={onClose}
-        title={person ? `Verifying ${person.name}` : 'Verify people'}
+        title={person ? `Verify people · ${person.name}` : 'Verify people'}
         hint="Tap any face that's the wrong person — it goes back to the unassigned pool. The rest are confirmed."
         meta={meta}
         faces={q.faces}

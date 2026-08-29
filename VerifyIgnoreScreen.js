@@ -1,4 +1,5 @@
 import React, { useCallback } from 'react';
+import { Image } from 'react-native';
 
 import { authedFetch, API_BASE } from './auth';
 import ReviewGrid, { PAGE_LIMIT } from './ReviewGrid';
@@ -26,6 +27,8 @@ const VerifyIgnoreScreen = ({ visible, onClose }) => {
     // we've worked through the reachable sample; start fresh rather than
     // dead-end on an empty screen.
     const pool = fresh.length > 0 || all.length === 0 ? fresh : all;
+    // Warm the images for the pages beyond this screenful.
+    pool.slice(PAGE_LIMIT).forEach((f) => Image.prefetch(f.face_img_url));
     return { faces: pool.slice(0, PAGE_LIMIT) };
   }, []);
 
@@ -47,7 +50,7 @@ const VerifyIgnoreScreen = ({ visible, onClose }) => {
     <ReviewGrid
       visible={visible}
       onClose={onClose}
-      title="Verifying ignored faces"
+      title="Verify ignored faces"
       hint="Tap any face that's actually a real person — it goes back to the unassigned pool. The rest stay ignored."
       faces={q.faces}
       excluded={q.excluded}

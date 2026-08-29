@@ -21,8 +21,8 @@ export const CHIP_SIZE = Math.floor(
 // Fit whole rows that clear the fixed header / meta-row / hint / footer
 // chrome; no scroll. These heights are identical on every grid screen so
 // the first photo lands at the same spot regardless of which one you're
-// on (header 90 + meta 38 + hint 34 + footer 96, plus slack).
-const CHROME = 90 + 38 + 34 + 96 + 16;
+// on: paddingTop 44 + header 36 + meta 28 + hint 16 + footer ~74 + slack.
+const CHROME = 44 + 36 + 28 + 16 + 74 + 4;
 export const ROWS = Math.max(
   2,
   Math.min(8, Math.floor((height - CHROME) / (CHIP_SIZE + GRID_GAP)))
@@ -104,7 +104,7 @@ const ReviewGrid = ({
           </TouchableOpacity>
         </View>
         <View style={styles.metaRow}>{meta}</View>
-        <Text style={styles.hint} numberOfLines={2}>{hint}</Text>
+        <Text style={styles.hint} numberOfLines={1}>{hint}</Text>
 
         {loading ? (
           <View style={styles.centerFill}>
@@ -148,27 +148,26 @@ const styles = StyleSheet.create({
     paddingTop: 44,
   },
   header: {
-    height: 44,
+    height: 36,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingLeft: 60, // clear the global hamburger button (top-left)
     paddingRight: 16,
   },
-  title: { flex: 1, fontSize: 20, fontWeight: 'bold', color: '#333' },
+  title: { flex: 1, fontSize: 19, fontWeight: 'bold', color: '#333' },
   closeButton: { padding: 6 },
   closeText: { fontSize: 20, color: '#555', fontWeight: 'bold' },
   metaRow: {
-    height: 38,
+    height: 28,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
   },
   hint: {
-    height: 34,
+    height: 16,
     fontSize: 12,
-    lineHeight: 16,
-    color: '#777',
+    color: '#888',
     textAlign: 'center',
     paddingHorizontal: 20,
   },
@@ -204,9 +203,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 4,
   },
-  footer: { padding: 16, paddingBottom: 32 },
+  footer: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 18 },
   submitButton: {
-    paddingVertical: 16,
+    paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',
   },
