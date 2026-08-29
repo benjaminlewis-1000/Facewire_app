@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   FlatList,
   ActivityIndicator,
-  Modal,
   Dimensions,
 } from 'react-native';
 
@@ -85,8 +84,9 @@ const ReviewGrid = ({
     );
   };
 
+  if (!visible) return null;
+
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.title}>{title}</Text>
@@ -129,17 +129,21 @@ const ReviewGrid = ({
           </>
         )}
       </View>
-    </Modal>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f0f0f0', paddingTop: 44 },
+  container: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#f0f0f0',
+    paddingTop: 44,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingLeft: 60, // clear the global hamburger button (top-left)
+    paddingRight: 16,
     paddingBottom: 10,
   },
   title: { fontSize: 20, fontWeight: 'bold', color: '#333' },

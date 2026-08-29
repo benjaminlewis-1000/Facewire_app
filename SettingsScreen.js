@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Modal, ScrollView } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView } from 'react-native';
 
 const PREFETCH_DEFAULT = 10;
 const PREFETCH_MAX = 60;
@@ -21,8 +21,9 @@ const SettingsScreen = ({
   const setValue = (n) => onChangePrefetchCount(Math.max(0, Math.min(PREFETCH_MAX, n)));
   const setPages = (n) => onChangeIgnorePages(Math.max(0, Math.min(IGNORE_PAGES_MAX, n)));
 
+  if (!visible) return null;
+
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.title}>Settings</Text>
@@ -111,15 +112,19 @@ const SettingsScreen = ({
           )}
         </ScrollView>
       </View>
-    </Modal>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f0f0f0', paddingTop: 44 },
+  container: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#f0f0f0',
+    paddingTop: 44,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingLeft: 44,
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingBottom: 10,

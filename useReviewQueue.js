@@ -15,8 +15,9 @@ import { authedFetch } from './auth';
  *   submitUrl        the bulk-action endpoint
  *
  * Returns { faces, excluded, toggle, loading, error, submit, reload, setError }.
- * `submit` is optimistic: it fires the PATCH in the background and pulls
- * the next page immediately. `reload()` resolves to the page's `meta`.
+ * `submit` awaits the PATCH, then reloads -- so the next page (and any
+ * server-computed counts on it) reflect the write. `reload()` resolves to
+ * the page's `meta`.
  *
  * `onPage(meta)` (optional) runs after every successful load, so screens
  * with per-page context (e.g. "verify people" shows one person at a time)
@@ -71,24 +72,29 @@ export default function useReviewQueue({ visible, fetchPage, buildBody, submitUr
     });
   }, []);
 
-  const submit = useCallback(() => {
+  const submit = useCallback(async () => {
     if (loading || faces.length === 0) return;
     const keep = faces.filter((f) => !excluded.has(f.id)).map((f) => f.id);
     const flag = faces.filter((f) => excluded.has(f.id)).map((f) => f.id);
 
-    authedFetch(submitUrl, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(buildBody(keep, flag)),
-    })
-      .then((resp) => {
-        if (!resp.ok) setError("Couldn't save that batch — reopen to retry.");
-      })
-      .catch((e) => {
-        console.warn('review submit failed:', e);
-        setError("Couldn't save that batch — reopen to retry.");
+    setLoading(true);
+    let ok = false;
+    try {
+      const resp = await authedFetch(submitUrl, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildBody(keep, flag)),
       });
-
+      ok = resp.ok;
+    } catch (e) {
+      console.warn('review submit failed:', e);
+    }
+    if (!ok) {
+      setError("Couldn't save that batch — try again.");
+      setLoading(false);
+      return;
+    }
+    // Write landed -> the reload's page + counts now reflect it.
     load();
   }, [faces, excluded, loading, buildBody, submitUrl, load]);
 

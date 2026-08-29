@@ -50,10 +50,15 @@ export default function App() {
   const [showSourceImageModal, setShowSourceImageModal] = useState(false); // New state for source image modal
   const [currentSourceImage, setCurrentSourceImage] = useState(null); // New state for source image URL
   const [showUndoModal, setShowUndoModal] = useState(false); // State for "Undo assignment" confirmation modal
-  const [showIgnoreReview, setShowIgnoreReview] = useState(false); // "Review ignored faces" screen
-  const [showVerifyPeople, setShowVerifyPeople] = useState(false); // "Verify people" screen
-  const [showVerifyIgnore, setShowVerifyIgnore] = useState(false); // "Verify ignored" screen
-  const [showSettings, setShowSettings] = useState(false); // Settings screen
+
+  // Which full-page screen is showing. 'label' is the main tagging queue;
+  // the rest are reached from the hamburger menu.
+  //   'label' | 'verify_people' | 'verify_ignore' | 'ignore_review' | 'settings'
+  const [screen, setScreen] = useState('label');
+  const goToScreen = (s) => {
+    setIsMenuVisible(false);
+    setScreen(s);
+  };
 
   // How many upcoming faces to prefetch (instance data + image) in the
   // background. Persisted in AsyncStorage; adjustable from Settings.
@@ -126,6 +131,8 @@ export default function App() {
     setCurrentImage(data.face_img_url || placeholderImages[0]);
     setButtonNames(Array.isArray(data.names) ? data.names.map((i) => i.name) : []);
     setCurrentSourceImage(data.source_img_url || null);
+    // Preload the full-size source now so the zoom modal opens instantly.
+    if (data.source_img_url) Image.prefetch(data.source_img_url);
   };
 
   /**
@@ -224,6 +231,8 @@ export default function App() {
       fetchUnlabeledInstanceData(id, { display: false, allowCache: false })
         .then((data) => {
           if (data && data.face_img_url) Image.prefetch(data.face_img_url);
+          // Warm the full-size source image too, so tap-to-zoom is instant.
+          if (data && data.source_img_url) Image.prefetch(data.source_img_url);
         })
         .catch(() => {});
     }
@@ -808,14 +817,8 @@ export default function App() {
         return false; // passive: let children handle the touch
       }}
     >
-      {/* Hamburger Menu Icon */}
-      <TouchableOpacity
-        style={styles.hamburgerIcon}
-        onPress={() => setIsMenuVisible(true)}
-      >
-        <Text style={styles.hamburgerText}>☰</Text>
-      </TouchableOpacity>
-
+      {screen === 'label' && (
+       <>
       {/* Face nav (within the current person's list) */}
       <View style={styles.navigationButtonsContainer}>
         <TouchableOpacity
@@ -989,6 +992,8 @@ export default function App() {
           </TouchableOpacity>
         </View>
       )}
+       </>
+      )}
 
 
       {/* Hamburger Menu Modal */}
@@ -1004,57 +1009,52 @@ export default function App() {
           onPress={() => setIsMenuVisible(false)}
         >
           <View style={styles.menuContainer}>
-            {/* Close Button for the menu */}
-            <TouchableOpacity
-              style={styles.menuCloseButton}
-              onPress={() => setIsMenuVisible(false)}
-            >
-              <Text style={styles.menuCloseText}>X</Text>
-            </TouchableOpacity>
+           <ScrollView showsVerticalScrollIndicator={false}>
+            <Text style={styles.menuSectionHeader}>Review</Text>
 
-            {/* Menu Options */}
-            <TouchableOpacity style={styles.menuOption} onPress={refreshQueueFromApi}>
+            {[
+              ['label', 'Label faces'],
+              ['verify_people', 'Verify people'],
+              ['verify_ignore', 'Verify ignored'],
+              ['ignore_review', 'Confirm ignored'],
+            ].map(([key, label]) => (
+              <TouchableOpacity
+                key={key}
+                style={styles.menuOption}
+                onPress={() => goToScreen(key)}
+              >
+                <Text
+                  style={[
+                    styles.menuOptionText,
+                    screen === key && styles.menuOptionTextActive,
+                  ]}
+                >
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+
+            <Text style={styles.menuSectionHeader}>App</Text>
+
+            <TouchableOpacity
+              style={styles.menuOption}
+              onPress={() => {
+                setIsMenuVisible(false);
+                refreshQueueFromApi();
+              }}
+            >
               <Text style={styles.menuOptionText}>Refresh queue</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.menuOption}
-              onPress={() => {
-                setIsMenuVisible(false);
-                setShowIgnoreReview(true);
-              }}
-            >
-              <Text style={styles.menuOptionText}>Review ignored faces</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.menuOption}
-              onPress={() => {
-                setIsMenuVisible(false);
-                setShowVerifyPeople(true);
-              }}
-            >
-              <Text style={styles.menuOptionText}>Verify people</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.menuOption}
-              onPress={() => {
-                setIsMenuVisible(false);
-                setShowVerifyIgnore(true);
-              }}
-            >
-              <Text style={styles.menuOptionText}>Verify ignored</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.menuOption}
-              onPress={() => {
-                setIsMenuVisible(false);
-                setShowSettings(true);
-              }}
-            >
-              <Text style={styles.menuOptionText}>Settings</Text>
+            <TouchableOpacity style={styles.menuOption} onPress={() => goToScreen('settings')}>
+              <Text
+                style={[
+                  styles.menuOptionText,
+                  screen === 'settings' && styles.menuOptionTextActive,
+                ]}
+              >
+                Settings
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.menuOption} onPress={handleLock}>
@@ -1068,25 +1068,24 @@ export default function App() {
             <TouchableOpacity
               style={styles.menuOption}
               onPress={() => {
-                setIsMenuVisible(false); // Close menu
-                setShowIdsModal(true); // Open IDs modal
+                setIsMenuVisible(false);
+                setShowIdsModal(true);
               }}
             >
-              <Text style={styles.menuOptionText}>View Confident Unlabeled IDs</Text>
+              <Text style={styles.menuOptionDebugText}>Debug: Confident Unlabeled IDs</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.menuOption}
               onPress={() => {
-                setIsMenuVisible(false); // Close menu
-                setShowInstanceDataModal(true); // Open instance data modal
+                setIsMenuVisible(false);
+                setShowInstanceDataModal(true);
               }}
-              disabled={!currentUnlabeledInstanceData} // Disable if no data
+              disabled={!currentUnlabeledInstanceData}
             >
-              <Text style={styles.menuOptionText}>View Current Instance Data</Text>
+              <Text style={styles.menuOptionDebugText}>Debug: Current Instance Data</Text>
             </TouchableOpacity>
-
-            {/* Add more menu options here if needed */}
+           </ScrollView>
           </View>
         </TouchableOpacity>
       </Modal>
@@ -1267,30 +1266,40 @@ export default function App() {
         </TouchableOpacity>
       </Modal>
 
-      <IgnoreReviewScreen
-        visible={showIgnoreReview}
-        onClose={() => setShowIgnoreReview(false)}
-        pagesToCache={ignorePages}
-      />
+      {screen === 'ignore_review' && (
+        <IgnoreReviewScreen
+          visible
+          onClose={() => setScreen('label')}
+          pagesToCache={ignorePages}
+        />
+      )}
 
-      <VerifyPeopleScreen
-        visible={showVerifyPeople}
-        onClose={() => setShowVerifyPeople(false)}
-      />
+      {screen === 'verify_people' && (
+        <VerifyPeopleScreen visible onClose={() => setScreen('label')} />
+      )}
 
-      <VerifyIgnoreScreen
-        visible={showVerifyIgnore}
-        onClose={() => setShowVerifyIgnore(false)}
-      />
+      {screen === 'verify_ignore' && (
+        <VerifyIgnoreScreen visible onClose={() => setScreen('label')} />
+      )}
 
-      <SettingsScreen
-        visible={showSettings}
-        onClose={() => setShowSettings(false)}
-        prefetchCount={prefetchCount}
-        onChangePrefetchCount={updatePrefetchCount}
-        ignorePages={ignorePages}
-        onChangeIgnorePages={updateIgnorePages}
-      />
+      {screen === 'settings' && (
+        <SettingsScreen
+          visible
+          onClose={() => setScreen('label')}
+          prefetchCount={prefetchCount}
+          onChangePrefetchCount={updatePrefetchCount}
+          ignorePages={ignorePages}
+          onChangeIgnorePages={updateIgnorePages}
+        />
+      )}
+
+      {/* Hamburger button -- rendered last so it stays above every screen */}
+      <TouchableOpacity
+        style={styles.hamburgerIcon}
+        onPress={() => setIsMenuVisible(true)}
+      >
+        <Text style={styles.hamburgerText}>☰</Text>
+      </TouchableOpacity>
     </View>
     </GestureHandlerRootView>
   );
@@ -1313,9 +1322,10 @@ const styles = StyleSheet.create({
   },
   hamburgerIcon: {
     position: 'absolute',
-    top: 40, // Adjusted top position to be within the new padding
+    top: 40,
     left: 20,
-    zIndex: 1, // Ensure it's above other elements
+    zIndex: 20, // above the full-screen review/settings screens
+    elevation: 20,
     padding: 10,
   },
   hamburgerText: {
@@ -1427,6 +1437,15 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
   },
+  menuSectionHeader: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#999',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginTop: 22,
+    marginBottom: 4,
+  },
   menuOption: {
     paddingVertical: 15,
     borderBottomWidth: 1,
@@ -1435,6 +1454,14 @@ const styles = StyleSheet.create({
   menuOptionText: {
     fontSize: 18,
     color: '#333',
+  },
+  menuOptionTextActive: {
+    color: '#007bff',
+    fontWeight: 'bold',
+  },
+  menuOptionDebugText: {
+    fontSize: 14,
+    color: '#aaa',
   },
   imageTouchable: {
     width: '100%', // Ensure touchable area covers the container
