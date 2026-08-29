@@ -47,7 +47,7 @@ const VerifyIgnoreScreen = ({ visible, onClose }) => {
     <ReviewGrid
       visible={visible}
       onClose={onClose}
-      title="Verify ignored"
+      title="Verifying ignored faces"
       hint="Tap any face that's actually a real person — it goes back to the unassigned pool. The rest stay ignored."
       faces={q.faces}
       excluded={q.excluded}

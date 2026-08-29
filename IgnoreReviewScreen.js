@@ -58,7 +58,7 @@ const IgnoreReviewScreen = ({ visible, onClose, pagesToCache = 1 }) => {
     <ReviewGrid
       visible={visible}
       onClose={onClose}
-      title="Confirm ignored faces"
+      title="Confirming ignored faces"
       hint="Faces guessed as “ignore”. Tap any you don't want to decide on — it stays a proposed ignore but won't show here again."
       faces={q.faces}
       excluded={q.excluded}

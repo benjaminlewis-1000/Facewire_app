@@ -55,9 +55,13 @@ const VerifyPeopleScreen = ({ visible, onClose }) => {
         // Landed on a new person: latch their count from the server (only
         // sent on this first, unpinned load). From here we track it
         // locally -- see onSubmit -- so there's no COUNT query per screen.
+        const isTransition = currentPersonIdRef.current !== null;
         currentPersonIdRef.current = meta.id;
         setRemaining(typeof meta.count === 'number' ? meta.count : null);
-        showPopup(meta.name);
+        // Only pop the "Now verifying" cue when moving *between* people --
+        // not on the first load (the banner already says who) or a
+        // Fast-Refresh remount.
+        if (isTransition) showPopup(meta.name);
       }
     },
     [showPopup]
@@ -106,20 +110,15 @@ const VerifyPeopleScreen = ({ visible, onClose }) => {
       ? `Verify ${verifyCount}` + (resetCount ? `  ·  reset ${resetCount}` : '')
       : `Reset ${resetCount}`;
 
-  const subHeader = person ? (
-    <View style={styles.personBar}>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.personName} numberOfLines={1}>
-          {person.name}
-        </Text>
-        <Text style={styles.personCount}>
-          {typeof remaining === 'number' ? `~${remaining} unverified` : 'unverified'}
-        </Text>
-      </View>
+  const meta = person ? (
+    <>
+      <Text style={styles.metaCount}>
+        {typeof remaining === 'number' ? `~${remaining} unverified` : 'unverified'}
+      </Text>
       <TouchableOpacity onPress={skipPerson} hitSlop={10} style={styles.skipBtn}>
         <Text style={styles.skipText}>Skip person ▸</Text>
       </TouchableOpacity>
-    </View>
+    </>
   ) : null;
 
   return (
@@ -127,9 +126,9 @@ const VerifyPeopleScreen = ({ visible, onClose }) => {
       <ReviewGrid
         visible={visible}
         onClose={onClose}
-        title="Verify people"
+        title={person ? `Verifying ${person.name}` : 'Verify people'}
         hint="Tap any face that's the wrong person — it goes back to the unassigned pool. The rest are confirmed."
-        subHeader={subHeader}
+        meta={meta}
         faces={q.faces}
         excluded={q.excluded}
         onToggle={q.toggle}
@@ -156,18 +155,7 @@ const VerifyPeopleScreen = ({ visible, onClose }) => {
 };
 
 const styles = StyleSheet.create({
-  personBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 18,
-    paddingVertical: 8,
-    marginHorizontal: 12,
-    marginBottom: 2,
-    backgroundColor: '#e8f0e9',
-    borderRadius: 10,
-  },
-  personName: { fontSize: 17, fontWeight: 'bold', color: '#1b3a1d' },
-  personCount: { fontSize: 12, color: '#4a6b4c' },
+  metaCount: { flex: 1, fontSize: 13, color: '#4a6b4c' },
   skipBtn: { paddingVertical: 6, paddingLeft: 10 },
   skipText: { fontSize: 13, color: '#2E7D32', fontWeight: '600' },
   popupWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0006' },

@@ -18,8 +18,11 @@ export const CHIP_SIZE = Math.floor(
   (width - GRID_PADDING * 2 - GRID_GAP * (COLS - 1)) / COLS
 );
 
-// Fit whole rows that clear the header/hint/footer chrome; no scroll.
-const CHROME = 100 + 44 + 96;
+// Fit whole rows that clear the fixed header / meta-row / hint / footer
+// chrome; no scroll. These heights are identical on every grid screen so
+// the first photo lands at the same spot regardless of which one you're
+// on (header 90 + meta 38 + hint 34 + footer 96, plus slack).
+const CHROME = 90 + 38 + 34 + 96 + 16;
 export const ROWS = Math.max(
   2,
   Math.min(8, Math.floor((height - CHROME) / (CHIP_SIZE + GRID_GAP)))
@@ -31,11 +34,16 @@ export const PAGE_LIMIT = COLS * ROWS;
  * verify people, verify ignored). Owns layout + chip interaction only;
  * the parent owns data fetching, the excluded set and submit behaviour.
  *
+ * Every grid screen uses the same fixed-height header / meta-row / hint
+ * stack, so the photo grid starts at the same Y on all of them.
+ *
  * Props:
  *   visible, onClose
- *   title            header text
- *   hint             one-line instruction under the header
- *   subHeader        optional node rendered above the grid (e.g. person bar)
+ *   title            banner text (what screen you're on)
+ *   hint             instruction under the banner (clamped to 2 lines)
+ *   meta             optional node for the fixed-height row below the
+ *                    banner (e.g. "~N unverified" + Skip person); the row
+ *                    is always reserved even when this is null
  *   faces            [{ id, face_img_url }] currently on screen
  *   excluded         Set of flagged face ids
  *   onToggle(id)
@@ -50,7 +58,7 @@ const ReviewGrid = ({
   onClose,
   title,
   hint,
-  subHeader = null,
+  meta = null,
   faces = [],
   excluded,
   onToggle,
@@ -88,12 +96,15 @@ const ReviewGrid = ({
 
   return (
       <View style={styles.container}>
+        {/* Fixed header stack -- identical geometry on every grid screen */}
         <View style={styles.header}>
-          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.title} numberOfLines={1}>{title}</Text>
           <TouchableOpacity onPress={onClose} style={styles.closeButton} hitSlop={12}>
             <Text style={styles.closeText}>✕</Text>
           </TouchableOpacity>
         </View>
+        <View style={styles.metaRow}>{meta}</View>
+        <Text style={styles.hint} numberOfLines={2}>{hint}</Text>
 
         {loading ? (
           <View style={styles.centerFill}>
@@ -106,8 +117,6 @@ const ReviewGrid = ({
           </View>
         ) : (
           <>
-            {subHeader}
-            <Text style={styles.hint}>{hint}</Text>
             <FlatList
               data={faces}
               renderItem={renderChip}
@@ -139,22 +148,29 @@ const styles = StyleSheet.create({
     paddingTop: 44,
   },
   header: {
+    height: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingLeft: 60, // clear the global hamburger button (top-left)
     paddingRight: 16,
-    paddingBottom: 10,
   },
-  title: { fontSize: 20, fontWeight: 'bold', color: '#333' },
+  title: { flex: 1, fontSize: 20, fontWeight: 'bold', color: '#333' },
   closeButton: { padding: 6 },
   closeText: { fontSize: 20, color: '#555', fontWeight: 'bold' },
+  metaRow: {
+    height: 38,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
   hint: {
-    fontSize: 13,
+    height: 34,
+    fontSize: 12,
+    lineHeight: 16,
     color: '#777',
     textAlign: 'center',
     paddingHorizontal: 20,
-    marginBottom: 8,
   },
   centerFill: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   emptyTitle: { fontSize: 20, fontWeight: 'bold', color: '#333', marginBottom: 8 },
@@ -195,7 +211,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   submitButtonText: { color: '#fff', fontSize: 17, fontWeight: 'bold' },
-  subHeaderBar: {},
 });
 
 export default ReviewGrid;
