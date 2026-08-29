@@ -1,5 +1,4 @@
 import React, { useCallback } from 'react';
-import { Image } from 'react-native';
 
 import { authedFetch, API_BASE } from './auth';
 import ReviewGrid, { PAGE_LIMIT } from './ReviewGrid';
@@ -14,22 +13,16 @@ import useReviewQueue from './useReviewQueue';
  */
 const VerifyIgnoreScreen = ({ visible, onClose }) => {
   const fetchPage = useCallback(async (seen) => {
-    // Over-fetch so we can drop already-seen faces and still fill a page.
     const resp = await authedFetch(
-      `${API_BASE}/mobile/verify_ignore_candidates/?limit=${PAGE_LIMIT * 3}`
+      `${API_BASE}/mobile/verify_ignore_candidates/?limit=${PAGE_LIMIT * 4}`
     );
     if (resp.networkError) throw new Error('network');
     if (!resp.ok) throw new Error(`status ${resp.status}`);
     const data = await resp.json();
     const all = Array.isArray(data.faces) ? data.faces : [];
-    const fresh = all.filter((f) => !seen.has(f.id));
-    // Everything came back already seen but the pool clearly isn't empty ->
-    // we've worked through the reachable sample; start fresh rather than
-    // dead-end on an empty screen.
-    const pool = fresh.length > 0 || all.length === 0 ? fresh : all;
-    // Warm the images for the pages beyond this screenful.
-    pool.slice(PAGE_LIMIT).forEach((f) => Image.prefetch(f.face_img_url));
-    return { faces: pool.slice(0, PAGE_LIMIT) };
+    // The hook dedupes against the buffer; we just drop faces already
+    // shown earlier this session.
+    return { faces: all.filter((f) => !seen.has(f.id)) };
   }, []);
 
   const q = useReviewQueue({
@@ -51,11 +44,12 @@ const VerifyIgnoreScreen = ({ visible, onClose }) => {
       visible={visible}
       onClose={onClose}
       title="Verify ignored faces"
-      hint="Tap any face that's actually a real person — it goes back to the unassigned pool. The rest stay ignored."
+      hint="Tap real people to send them back for reprocessing."
       faces={q.faces}
       excluded={q.excluded}
       onToggle={q.toggle}
       loading={q.loading}
+      busy={q.busy}
       error={q.error}
       emptyBody={q.error || 'No unverified ignored faces left.'}
       submitLabel={submitLabel}

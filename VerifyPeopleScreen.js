@@ -1,14 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Modal, Image } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, Modal } from 'react-native';
 
 import { authedFetch, API_BASE } from './auth';
 import ReviewGrid, { PAGE_LIMIT } from './ReviewGrid';
 import useReviewQueue from './useReviewQueue';
 
-// Over-fetch this many screenfuls so the images for upcoming pages are
-// already warm by the time you submit the current one.
-const PAGES_AHEAD = 2;
-const FETCH_LIMIT = Math.min(120, PAGE_LIMIT * (1 + PAGES_AHEAD));
+// Ask for several screenfuls at once; useReviewQueue buffers them so the
+// next page is instant.
+const FETCH_LIMIT = Math.min(120, PAGE_LIMIT * 4);
 
 /**
  * Verify unconfirmed assignments for one *named* person at a time, biggest
@@ -44,30 +43,31 @@ const VerifyPeopleScreen = ({ visible, onClose }) => {
     const data = await resp.json();
     const all = Array.isArray(data.faces) ? data.faces : [];
     if (!data.person_id || all.length === 0) return { faces: [], meta: null };
-    // Warm the images for the pages beyond this screenful.
-    all.slice(PAGE_LIMIT).forEach((f) => Image.prefetch(f.face_img_url));
     return {
-      faces: all.slice(0, PAGE_LIMIT),
+      faces: all,
       meta: { id: data.person_id, name: data.person_name, count: data.unverified_count },
     };
   }, []);
 
   const handlePage = useCallback(
     (meta) => {
+      if (!meta) {
+        // Pinned person exhausted (or queue empty). Drop the pin so the
+        // next fetch re-picks; leave `person` alone so the banner doesn't
+        // flicker -- the grid's empty state covers a truly empty queue.
+        pinnedPersonIdRef.current = null;
+        return;
+      }
       setPerson(meta);
-      // Pin the server to this person for subsequent loads; null => the
-      // queue is exhausted.
-      pinnedPersonIdRef.current = meta ? meta.id : null;
-      if (meta && meta.id !== currentPersonIdRef.current) {
+      pinnedPersonIdRef.current = meta.id; // stay on them until exhausted
+      if (meta.id !== currentPersonIdRef.current) {
         // Landed on a new person: latch their count from the server (only
         // sent on this first, unpinned load). From here we track it
         // locally -- see onSubmit -- so there's no COUNT query per screen.
         const isTransition = currentPersonIdRef.current !== null;
         currentPersonIdRef.current = meta.id;
         setRemaining(typeof meta.count === 'number' ? meta.count : null);
-        // Only pop the "Now verifying" cue when moving *between* people --
-        // not on the first load (the banner already says who) or a
-        // Fast-Refresh remount.
+        // Only pop the "Now verifying" cue when moving *between* people.
         if (isTransition) showPopup(meta.name);
       }
     },
@@ -117,10 +117,10 @@ const VerifyPeopleScreen = ({ visible, onClose }) => {
       ? `Verify ${verifyCount}` + (resetCount ? `  ·  reset ${resetCount}` : '')
       : `Reset ${resetCount}`;
 
-  const meta = person ? (
+  const meta = person && q.faces.length ? (
     <>
       <Text style={styles.metaCount}>
-        {typeof remaining === 'number' ? `~${remaining} unverified` : 'unverified'}
+        {typeof remaining === 'number' ? `~${remaining} left` : ' '}
       </Text>
       <TouchableOpacity onPress={skipPerson} hitSlop={10} style={styles.skipBtn}>
         <Text style={styles.skipText}>Skip person ▸</Text>
@@ -133,13 +133,14 @@ const VerifyPeopleScreen = ({ visible, onClose }) => {
       <ReviewGrid
         visible={visible}
         onClose={onClose}
-        title={person ? `Verify people · ${person.name}` : 'Verify people'}
-        hint="Tap any face that's the wrong person — it goes back to the unassigned pool. The rest are confirmed."
+        title={person && q.faces.length ? `Verify people · ${person.name}` : 'Verify people'}
+        hint="Tap the wrong ones to send them back for reprocessing."
         meta={meta}
         faces={q.faces}
         excluded={q.excluded}
         onToggle={q.toggle}
         loading={q.loading}
+        busy={q.busy}
         error={q.error}
         emptyBody={q.error || 'No unverified faces for any named person.'}
         submitLabel={submitLabel}

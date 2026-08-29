@@ -21,8 +21,9 @@ export const CHIP_SIZE = Math.floor(
 // Fit whole rows that clear the fixed header / meta-row / hint / footer
 // chrome; no scroll. These heights are identical on every grid screen so
 // the first photo lands at the same spot regardless of which one you're
-// on: paddingTop 44 + header 36 + meta 28 + hint 16 + footer ~74 + slack.
-const CHROME = 44 + 36 + 28 + 16 + 74 + 4;
+// on. Generous top (status bar) + bottom (Android nav bar) padding.
+// paddingTop 56 + header 40 + meta 34 + hint 20 + footer ~96 + slack.
+const CHROME = 56 + 40 + 34 + 20 + 96 + 6;
 export const ROWS = Math.max(
   2,
   Math.min(8, Math.floor((height - CHROME) / (CHIP_SIZE + GRID_GAP)))
@@ -42,12 +43,15 @@ export const PAGE_LIMIT = COLS * ROWS;
  *   title            banner text (what screen you're on)
  *   hint             instruction under the banner (clamped to 2 lines)
  *   meta             optional node for the fixed-height row below the
- *                    banner (e.g. "~N unverified" + Skip person); the row
- *                    is always reserved even when this is null
+ *                    banner (e.g. "~N left" + Skip person); the row is
+ *                    always reserved even when this is null
  *   faces            [{ id, face_img_url }] currently on screen
  *   excluded         Set of flagged face ids
  *   onToggle(id)
- *   loading, error   booleans/strings for the two non-grid states
+ *   loading          true when there's nothing to show yet (full spinner)
+ *   busy             true while a submit is in flight (button disabled,
+ *                    grid stays put -- no spinner)
+ *   error            message string or ''
  *   emptyTitle, emptyBody
  *   submitLabel      button text
  *   onSubmit
@@ -63,6 +67,7 @@ const ReviewGrid = ({
   excluded,
   onToggle,
   loading,
+  busy = false,
   error,
   emptyTitle = 'All caught up',
   emptyBody = 'Nothing to review right now.',
@@ -129,10 +134,17 @@ const ReviewGrid = ({
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
             <View style={styles.footer}>
               <TouchableOpacity
-                style={[styles.submitButton, { backgroundColor: accent }]}
+                style={[
+                  styles.submitButton,
+                  { backgroundColor: accent },
+                  busy && styles.submitButtonBusy,
+                ]}
                 onPress={onSubmit}
+                disabled={busy}
               >
-                <Text style={styles.submitButtonText}>{submitLabel}</Text>
+                <Text style={styles.submitButtonText}>
+                  {busy ? 'Saving…' : submitLabel}
+                </Text>
               </TouchableOpacity>
             </View>
           </>
@@ -145,27 +157,27 @@ const styles = StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: '#f0f0f0',
-    paddingTop: 44,
+    paddingTop: 56,
   },
   header: {
-    height: 36,
+    height: 40,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingLeft: 60, // clear the global hamburger button (top-left)
+    paddingLeft: 62, // clear the global hamburger button (top-left)
     paddingRight: 16,
   },
-  title: { flex: 1, fontSize: 19, fontWeight: 'bold', color: '#333' },
+  title: { flex: 1, fontSize: 18, fontWeight: 'bold', color: '#333' },
   closeButton: { padding: 6 },
   closeText: { fontSize: 20, color: '#555', fontWeight: 'bold' },
   metaRow: {
-    height: 28,
+    height: 34,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 18,
   },
   hint: {
-    height: 16,
+    height: 20,
     fontSize: 12,
     color: '#888',
     textAlign: 'center',
@@ -203,12 +215,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 4,
   },
-  footer: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 18 },
+  footer: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40 },
   submitButton: {
-    paddingVertical: 14,
+    paddingVertical: 15,
     borderRadius: 12,
     alignItems: 'center',
   },
+  submitButtonBusy: { opacity: 0.6 },
   submitButtonText: { color: '#fff', fontSize: 17, fontWeight: 'bold' },
 });
 
