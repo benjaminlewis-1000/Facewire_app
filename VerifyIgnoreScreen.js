@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 
 import { authedFetch, API_BASE } from './auth';
 import ReviewGrid, { PAGE_LIMIT } from './ReviewGrid';
@@ -12,6 +12,8 @@ import useReviewQueue from './useReviewQueue';
  * random sample each load, so `seen` keeps faces from cycling back.
  */
 const VerifyIgnoreScreen = ({ visible, onClose }) => {
+  const [pageSize, setPageSize] = useState(PAGE_LIMIT);
+
   const fetchPage = useCallback(async (seen) => {
     const resp = await authedFetch(
       `${API_BASE}/mobile/verify_ignore_candidates/?limit=${PAGE_LIMIT * 4}`
@@ -28,6 +30,7 @@ const VerifyIgnoreScreen = ({ visible, onClose }) => {
   const q = useReviewQueue({
     visible,
     fetchPage,
+    pageSize,
     submitUrl: `${API_BASE}/mobile/bulk_verify/`,
     buildBody: (verify_ids, reset_ids) => ({ verify_ids, reset_ids }),
   });
@@ -48,6 +51,7 @@ const VerifyIgnoreScreen = ({ visible, onClose }) => {
       faces={q.faces}
       excluded={q.excluded}
       onToggle={q.toggle}
+      onCapacity={setPageSize}
       loading={q.loading}
       busy={q.busy}
       error={q.error}

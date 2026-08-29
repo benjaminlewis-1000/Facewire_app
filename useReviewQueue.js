@@ -28,7 +28,15 @@ import { PAGE_LIMIT } from './ReviewGrid';
  * setError }. `submit` returns true once the write landed (so callers with
  * their own running totals only advance them on success).
  */
-export default function useReviewQueue({ visible, fetchPage, buildBody, submitUrl, onPage }) {
+export default function useReviewQueue({
+  visible,
+  fetchPage,
+  buildBody,
+  submitUrl,
+  onPage,
+  pageSize = PAGE_LIMIT,
+}) {
+  const page = Math.max(3, pageSize || PAGE_LIMIT);
   const [faces, setFaces] = useState([]);
   const [excluded, setExcluded] = useState(() => new Set());
   const [loading, setLoading] = useState(true); // nothing to show yet
@@ -71,9 +79,9 @@ export default function useReviewQueue({ visible, fetchPage, buildBody, submitUr
   }, [fetchPage, onPage]);
 
   const showWindow = useCallback(() => {
-    setFaces(bufferRef.current.slice(0, PAGE_LIMIT));
+    setFaces(bufferRef.current.slice(0, page));
     setExcluded(new Set());
-  }, []);
+  }, [page]);
 
   // Keep fetching until the buffer holds `want` faces or the source dries
   // up. One extra try after a no-progress fetch covers the case where the
@@ -97,15 +105,23 @@ export default function useReviewQueue({ visible, fetchPage, buildBody, submitUr
     setError('');
     bufferRef.current = [];
     seen.current = new Set();
-    await fill(PAGE_LIMIT * 2);
+    await fill(page * 2);
     showWindow();
     setLoading(false);
-  }, [fill, showWindow]);
+  }, [fill, showWindow, page]);
 
   useEffect(() => {
     if (visible) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
+
+  // The grid remeasured (device chrome) -> re-window and top up if short.
+  useEffect(() => {
+    if (loading) return;
+    setFaces(bufferRef.current.slice(0, page));
+    if (bufferRef.current.length < page * 2) fill(page * 2);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
 
   const toggle = useCallback((id) => {
     setExcluded((prev) => {
@@ -143,16 +159,16 @@ export default function useReviewQueue({ visible, fetchPage, buildBody, submitUr
     if (bufferRef.current.length === 0) {
       // Nothing buffered (e.g. moved past this person) -> real fetch.
       setLoading(true);
-      await fill(PAGE_LIMIT);
+      await fill(page);
       showWindow();
       setLoading(false);
     } else {
       showWindow(); // instant
-      if (bufferRef.current.length < PAGE_LIMIT * 2) fill(PAGE_LIMIT * 2); // bg
+      if (bufferRef.current.length < page * 2) fill(page * 2); // bg
     }
     setBusy(false);
     return true;
-  }, [busy, loading, faces, excluded, buildBody, submitUrl, fill, showWindow]);
+  }, [busy, loading, faces, excluded, buildBody, submitUrl, fill, showWindow, page]);
 
   return { faces, excluded, toggle, loading, busy, error, submit, reload: load, setError };
 }

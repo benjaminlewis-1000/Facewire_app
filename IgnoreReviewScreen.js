@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 
 import { authedFetch, API_BASE } from './auth';
 import ReviewGrid, { PAGE_LIMIT } from './ReviewGrid';
@@ -11,6 +11,8 @@ import useReviewQueue from './useReviewQueue';
  * useReviewQueue buffers the batch so the next screenful is instant.
  */
 const IgnoreReviewScreen = ({ visible, onClose }) => {
+  const [pageSize, setPageSize] = useState(PAGE_LIMIT);
+
   const fetchPage = useCallback(async (seen) => {
     const resp = await authedFetch(
       `${API_BASE}/mobile/ignore_candidates/?limit=${PAGE_LIMIT * 4}`
@@ -25,6 +27,7 @@ const IgnoreReviewScreen = ({ visible, onClose }) => {
   const q = useReviewQueue({
     visible,
     fetchPage,
+    pageSize,
     submitUrl: `${API_BASE}/mobile/bulk_confirm_ignore/`,
     buildBody: (confirm_ids, hide_ids) => ({ confirm_ids, hide_ids }),
   });
@@ -45,6 +48,7 @@ const IgnoreReviewScreen = ({ visible, onClose }) => {
       faces={q.faces}
       excluded={q.excluded}
       onToggle={q.toggle}
+      onCapacity={setPageSize}
       loading={q.loading}
       busy={q.busy}
       error={q.error}

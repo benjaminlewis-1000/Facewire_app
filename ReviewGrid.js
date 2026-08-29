@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -18,17 +18,16 @@ export const CHIP_SIZE = Math.floor(
   (width - GRID_PADDING * 2 - GRID_GAP * (COLS - 1)) / COLS
 );
 
-// Fit whole rows that clear the fixed header / meta-row / hint / footer
-// chrome; no scroll. These heights are identical on every grid screen so
-// the first photo lands at the same spot regardless of which one you're
-// on. Generous top (status bar) + bottom (Android nav bar) padding.
-// paddingTop 56 + header 40 + meta 34 + hint 20 + footer ~118 + slack.
-const CHROME = 56 + 40 + 34 + 20 + 118 + 6;
-export const ROWS = Math.max(
-  2,
-  Math.min(8, Math.floor((height - CHROME) / (CHIP_SIZE + GRID_GAP)))
-);
-export const PAGE_LIMIT = COLS * ROWS;
+// Rough starting guess for how many faces fit (used only until the grid
+// area reports its real height via onLayout -> onCapacity). Deliberately
+// a bit low so the first render never overflows.
+const ROW_H = CHIP_SIZE + GRID_GAP;
+export const PAGE_LIMIT =
+  COLS * Math.max(3, Math.min(8, Math.floor((height - 320) / ROW_H)));
+
+// Given the measured height of the grid area, how many whole rows fit.
+const rowsForHeight = (h) =>
+  Math.max(1, Math.floor((h - GRID_PADDING * 2) / ROW_H));
 
 /**
  * Presentational shell for the tap-to-flag review grids (confirm ignored,
@@ -73,8 +72,17 @@ const ReviewGrid = ({
   emptyBody = 'Nothing to review right now.',
   submitLabel,
   onSubmit,
+  onCapacity,
   accent = '#C0392B',
 }) => {
+  // Measure the real height available for the grid and tell the parent
+  // how many faces fit, so a screenful is always whole rows with no
+  // scroll -- no matter the device chrome.
+  const [gridH, setGridH] = useState(0);
+  useEffect(() => {
+    if (gridH > 0 && onCapacity) onCapacity(rowsForHeight(gridH) * COLS);
+  }, [gridH, onCapacity]);
+
   const renderChip = ({ item }) => {
     const isExcluded = excluded.has(item.id);
     return (
@@ -111,17 +119,20 @@ const ReviewGrid = ({
         <View style={styles.metaRow}>{meta}</View>
         <Text style={styles.hint} numberOfLines={1}>{hint}</Text>
 
-        {loading ? (
-          <View style={styles.centerFill}>
-            <ActivityIndicator size="large" color="#007bff" />
-          </View>
-        ) : faces.length === 0 ? (
-          <View style={styles.centerFill}>
-            <Text style={styles.emptyTitle}>{emptyTitle}</Text>
-            <Text style={styles.emptyBody}>{error || emptyBody}</Text>
-          </View>
-        ) : (
-          <>
+        <View
+          style={styles.gridArea}
+          onLayout={(e) => setGridH(e.nativeEvent.layout.height)}
+        >
+          {loading ? (
+            <View style={styles.centerFill}>
+              <ActivityIndicator size="large" color="#007bff" />
+            </View>
+          ) : faces.length === 0 ? (
+            <View style={styles.centerFill}>
+              <Text style={styles.emptyTitle}>{emptyTitle}</Text>
+              <Text style={styles.emptyBody}>{error || emptyBody}</Text>
+            </View>
+          ) : (
             <FlatList
               data={faces}
               renderItem={renderChip}
@@ -131,24 +142,27 @@ const ReviewGrid = ({
               contentContainerStyle={styles.grid}
               columnWrapperStyle={styles.gridRow}
             />
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
-            <View style={styles.footer}>
-              <TouchableOpacity
-                style={[
-                  styles.submitButton,
-                  { backgroundColor: accent },
-                  busy && styles.submitButtonBusy,
-                ]}
-                onPress={onSubmit}
-                disabled={busy}
-              >
-                <Text style={styles.submitButtonText}>
-                  {busy ? 'Saving…' : submitLabel}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </>
-        )}
+          )}
+        </View>
+
+        {error && faces.length ? (
+          <Text style={styles.errorText}>{error}</Text>
+        ) : null}
+        <View style={styles.footer}>
+          <TouchableOpacity
+            style={[
+              styles.submitButton,
+              { backgroundColor: accent },
+              busy && styles.submitButtonBusy,
+            ]}
+            onPress={onSubmit}
+            disabled={busy}
+          >
+            <Text style={styles.submitButtonText}>
+              {busy ? 'Saving…' : submitLabel}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
   );
 };
@@ -183,6 +197,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 20,
   },
+  gridArea: { flex: 1 },
   centerFill: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   emptyTitle: { fontSize: 20, fontWeight: 'bold', color: '#333', marginBottom: 8 },
   emptyBody: { fontSize: 15, color: '#666', textAlign: 'center' },

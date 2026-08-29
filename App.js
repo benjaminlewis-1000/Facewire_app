@@ -9,13 +9,11 @@ import VerifyIgnoreScreen from './VerifyIgnoreScreen';
 import SettingsScreen from './SettingsScreen';
 import ScreenToast from './ScreenToast';
 
-// "You're now on X" cue shown for 2s whenever the screen changes.
+// Screen-entry cue (2s) for the screens that have no per-person cue of
+// their own. label / verify_people show a per-person toast instead.
 const SCREEN_TOAST = {
-  label: 'Labeling faces',
-  verify_people: 'Verify people',
   verify_ignore: 'Verifying ignored faces',
-  ignore_review: 'Confirming ignored faces',
-  settings: 'Settings',
+  ignore_review: 'Confirming ignored face guesses',
 };
 import { authedFetch, signOut, lockSession, getValidIdToken, API_BASE } from './auth';
 import { firstCheckIndex, pruneAndLocate, frontierAfterRemoval } from './queueLogic';
@@ -381,13 +379,6 @@ export default function App() {
     persistTimer.current = setTimeout(() => persistGroups(groups), 1200);
     return () => persistTimer.current && clearTimeout(persistTimer.current);
   }, [groups]);
-
-  // "Now labeling <name>" cue -- auto-dismisses after 2s (tap also closes).
-  useEffect(() => {
-    if (!personPopup) return;
-    const t = setTimeout(() => setPersonPopup(null), 2000);
-    return () => clearTimeout(t);
-  }, [personPopup]);
 
   const showEmptyQueue = () => {
     setQueueExhausted(false);
@@ -1257,31 +1248,14 @@ export default function App() {
         </View>
       </Modal>
 
-      {/* "Now labeling <person>" cue */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={!!personPopup}
-        onRequestClose={() => setPersonPopup(null)}
-      >
-        <TouchableOpacity
-          style={styles.popupOverlay}
-          activeOpacity={1}
-          onPress={() => setPersonPopup(null)}
-        >
-          <View style={styles.popupCard}>
-            <Text style={styles.popupLabel}>Now labeling</Text>
-            <Text style={styles.popupName}>{personPopup?.name}</Text>
-          </View>
-        </TouchableOpacity>
-      </Modal>
+      {/* Per-person cue on the label screen */}
+      <ScreenToast
+        trigger={personPopup}
+        title={personPopup ? `Confirming faces for ${personPopup.name}` : ''}
+      />
 
       {screen === 'ignore_review' && (
-        <IgnoreReviewScreen
-          visible
-          onClose={() => setScreen('label')}
-          pagesToCache={ignorePages}
-        />
+        <IgnoreReviewScreen visible onClose={() => setScreen('label')} />
       )}
 
       {screen === 'verify_people' && (
