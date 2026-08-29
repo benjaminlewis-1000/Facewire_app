@@ -4,10 +4,10 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "start": "expo start --port 8082",
-    "start:tailscale": "REACT_NATIVE_PACKAGER_HOSTNAME=100.69.34.1 expo start --port 8082",
-    "android": "expo start --port 8082 --android",
-    "ios": "expo start --port 8082 --ios",
+    "start": "expo start --offline --port 8082",
+    "start:tailscale": "REACT_NATIVE_PACKAGER_HOSTNAME=100.69.34.1 expo start --offline --port 8082",
+    "android": "expo start --offline --port 8082 --android",
+    "ios": "expo start --offline --port 8082 --ios",
     "web": "expo start --web",
     "test": "jest"
   },

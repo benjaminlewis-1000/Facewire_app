@@ -17,6 +17,7 @@ const VerifyPeopleScreen = ({ visible, onClose }) => {
   const [popupName, setPopupName] = useState('');
 
   const excludeIdsRef = useRef(new Set()); // person ids skipped this session
+  const pinnedPersonIdRef = useRef(null); // stay on this person until exhausted
   const lastPersonIdRef = useRef(null);
   const popupTimer = useRef(null);
 
@@ -28,8 +29,9 @@ const VerifyPeopleScreen = ({ visible, onClose }) => {
 
   const fetchPage = useCallback(async () => {
     const exclude = [...excludeIdsRef.current].join(',');
+    const pin = pinnedPersonIdRef.current ? `&person_id=${pinnedPersonIdRef.current}` : '';
     const resp = await authedFetch(
-      `${API_BASE}/mobile/verify_candidates/?limit=${PAGE_LIMIT}&exclude=${exclude}`
+      `${API_BASE}/mobile/verify_candidates/?limit=${PAGE_LIMIT}&exclude=${exclude}${pin}`
     );
     if (resp.networkError) throw new Error('network');
     if (!resp.ok) throw new Error(`status ${resp.status}`);
@@ -45,6 +47,9 @@ const VerifyPeopleScreen = ({ visible, onClose }) => {
   const handlePage = useCallback(
     (meta) => {
       setPerson(meta);
+      // Pin the server to this person for subsequent loads so the count
+      // tracks exactly what's being reviewed; null => queue exhausted.
+      pinnedPersonIdRef.current = meta ? meta.id : null;
       if (meta && meta.id !== lastPersonIdRef.current) {
         lastPersonIdRef.current = meta.id;
         showPopup(meta.name);
@@ -64,6 +69,7 @@ const VerifyPeopleScreen = ({ visible, onClose }) => {
   useEffect(() => {
     if (visible) {
       excludeIdsRef.current = new Set();
+      pinnedPersonIdRef.current = null;
       lastPersonIdRef.current = null;
     }
     return () => {
@@ -73,6 +79,7 @@ const VerifyPeopleScreen = ({ visible, onClose }) => {
 
   const skipPerson = () => {
     if (person) excludeIdsRef.current.add(person.id);
+    pinnedPersonIdRef.current = null; // let the server pick the next pile
     q.reload();
   };
 
