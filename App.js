@@ -4,6 +4,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage'; // Import 
 import { ImageZoom } from '@likashefqet/react-native-image-zoom';
 import LoginScreen from './LoginScreen'; // Import the new LoginScreen component
 import IgnoreReviewScreen from './IgnoreReviewScreen';
+import VerifyPeopleScreen from './VerifyPeopleScreen';
+import VerifyIgnoreScreen from './VerifyIgnoreScreen';
 import SettingsScreen from './SettingsScreen';
 import { authedFetch, signOut, lockSession, getValidIdToken, API_BASE } from './auth';
 import { firstCheckIndex, pruneAndLocate, frontierAfterRemoval } from './queueLogic';
@@ -49,6 +51,8 @@ export default function App() {
   const [currentSourceImage, setCurrentSourceImage] = useState(null); // New state for source image URL
   const [showUndoModal, setShowUndoModal] = useState(false); // State for "Undo assignment" confirmation modal
   const [showIgnoreReview, setShowIgnoreReview] = useState(false); // "Review ignored faces" screen
+  const [showVerifyPeople, setShowVerifyPeople] = useState(false); // "Verify people" screen
+  const [showVerifyIgnore, setShowVerifyIgnore] = useState(false); // "Verify ignored" screen
   const [showSettings, setShowSettings] = useState(false); // Settings screen
 
   // How many upcoming faces to prefetch (instance data + image) in the
@@ -1016,6 +1020,26 @@ export default function App() {
               style={styles.menuOption}
               onPress={() => {
                 setIsMenuVisible(false);
+                setShowVerifyPeople(true);
+              }}
+            >
+              <Text style={styles.menuOptionText}>Verify people</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.menuOption}
+              onPress={() => {
+                setIsMenuVisible(false);
+                setShowVerifyIgnore(true);
+              }}
+            >
+              <Text style={styles.menuOptionText}>Verify ignored</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.menuOption}
+              onPress={() => {
+                setIsMenuVisible(false);
                 setShowSettings(true);
               }}
             >
@@ -1236,6 +1260,16 @@ export default function App() {
         visible={showIgnoreReview}
         onClose={() => setShowIgnoreReview(false)}
         pagesToCache={ignorePages}
+      />
+
+      <VerifyPeopleScreen
+        visible={showVerifyPeople}
+        onClose={() => setShowVerifyPeople(false)}
+      />
+
+      <VerifyIgnoreScreen
+        visible={showVerifyIgnore}
+        onClose={() => setShowVerifyIgnore(false)}
       />
 
       <SettingsScreen
