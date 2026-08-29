@@ -13,7 +13,8 @@ import useReviewQueue from './useReviewQueue';
  * session and jumps to the next-biggest pile.
  */
 const VerifyPeopleScreen = ({ visible, onClose }) => {
-  const [person, setPerson] = useState(null); // { id, name, count }
+  const [person, setPerson] = useState(null); // { id, name }
+  const [remaining, setRemaining] = useState(null); // running unverified count
   const [popupName, setPopupName] = useState('');
 
   const excludeIdsRef = useRef(new Set()); // person ids skipped this session
@@ -47,11 +48,17 @@ const VerifyPeopleScreen = ({ visible, onClose }) => {
   const handlePage = useCallback(
     (meta) => {
       setPerson(meta);
-      // Pin the server to this person for subsequent loads so the count
-      // tracks exactly what's being reviewed; null => queue exhausted.
+      // Pin the server to this person for subsequent loads; null => the
+      // queue is exhausted.
       pinnedPersonIdRef.current = meta ? meta.id : null;
       if (meta && meta.id !== lastPersonIdRef.current) {
+        // Landed on a new person: latch their starting count from the
+        // server. While we stay on them the server sends count=null and
+        // we track it locally (see onSubmit) -- the reload races the
+        // fire-and-forget PATCH, so the server number can't be trusted
+        // mid-person anyway.
         lastPersonIdRef.current = meta.id;
+        setRemaining(typeof meta.count === 'number' ? meta.count : null);
         showPopup(meta.name);
       }
     },
@@ -71,6 +78,7 @@ const VerifyPeopleScreen = ({ visible, onClose }) => {
       excludeIdsRef.current = new Set();
       pinnedPersonIdRef.current = null;
       lastPersonIdRef.current = null;
+      setRemaining(null);
     }
     return () => {
       if (popupTimer.current) clearTimeout(popupTimer.current);
@@ -90,13 +98,24 @@ const VerifyPeopleScreen = ({ visible, onClose }) => {
       ? `Verify ${verifyCount}` + (resetCount ? `  ·  reset ${resetCount}` : '')
       : `Reset ${resetCount}`;
 
+  // Every face on the grid leaves this person's unverified pile on submit
+  // (verified -> validated, reset -> off the person). Decrement locally so
+  // the count is exact regardless of when the background PATCH lands.
+  const onSubmit = () => {
+    const leaving = q.faces.length;
+    setRemaining((r) => (typeof r === 'number' ? Math.max(0, r - leaving) : r));
+    q.submit();
+  };
+
   const subHeader = person ? (
     <View style={styles.personBar}>
       <View style={{ flex: 1 }}>
         <Text style={styles.personName} numberOfLines={1}>
           {person.name}
         </Text>
-        <Text style={styles.personCount}>{person.count} unverified</Text>
+        <Text style={styles.personCount}>
+          {typeof remaining === 'number' ? `${remaining} unverified` : 'unverified'}
+        </Text>
       </View>
       <TouchableOpacity onPress={skipPerson} hitSlop={10} style={styles.skipBtn}>
         <Text style={styles.skipText}>Skip person ▸</Text>
@@ -119,7 +138,7 @@ const VerifyPeopleScreen = ({ visible, onClose }) => {
         error={q.error}
         emptyBody={q.error || 'No unverified faces for any named person.'}
         submitLabel={submitLabel}
-        onSubmit={q.submit}
+        onSubmit={onSubmit}
         accent="#2E7D32"
       />
       <Modal visible={!!popupName} transparent animationType="fade">
