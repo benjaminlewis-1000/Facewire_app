@@ -14,22 +14,30 @@ const { width, height } = Dimensions.get('window');
 export const COLS = 3;
 const GRID_PADDING = 12;
 const GRID_GAP = 8;
+
+// The largest a chip can be, constrained by width alone.
 export const CHIP_SIZE = Math.floor(
   (width - GRID_PADDING * 2 - GRID_GAP * (COLS - 1)) / COLS
 );
 
-// Rough starting guess for how many faces fit (used only for the very
-// first render, until the grid area reports its real height via
-// onLayout -> onCapacity). ~284 = fixed chrome (padding + header + meta +
-// hint + footer) above/below the grid.
-const ROW_H = CHIP_SIZE + GRID_GAP;
+// First-render guess (until the grid area measures itself). ~284 = the
+// fixed chrome above/below the grid.
 export const PAGE_LIMIT =
-  COLS * Math.max(3, Math.min(9, Math.floor((height - 284) / ROW_H)));
+  COLS * Math.max(3, Math.min(9, Math.round((height - 284) / (CHIP_SIZE + GRID_GAP))));
 
-// Given the measured height of the grid area, how many whole rows fit.
-// (+GRID_GAP: the last row doesn't need its trailing marginBottom.)
-const rowsForHeight = (h) =>
-  Math.max(1, Math.floor((h - GRID_PADDING * 2 + GRID_GAP) / ROW_H));
+// Given the measured grid-area height, pick how many rows to show and how
+// big each chip should be. We ROUND the row count (so a row that almost
+// fits still gets shown) and then shrink the chips just enough to make
+// that many rows fit with no scroll.
+const layoutFor = (h) => {
+  const usable = h - GRID_PADDING * 2;
+  const rows = Math.max(3, Math.round((usable + GRID_GAP) / (CHIP_SIZE + GRID_GAP)));
+  const chip = Math.min(
+    CHIP_SIZE,
+    Math.floor((usable - (rows - 1) * GRID_GAP) / rows)
+  );
+  return { rows, chip };
+};
 
 /**
  * Presentational shell for the tap-to-flag review grids (confirm ignored,
@@ -77,19 +85,22 @@ const ReviewGrid = ({
   onCapacity,
   accent = '#C0392B',
 }) => {
-  // Measure the real height available for the grid and tell the parent
-  // how many faces fit, so a screenful is always whole rows with no
-  // scroll -- no matter the device chrome.
+  // Measure the real height available for the grid, then pick a row count
+  // (rounded -- a row that almost fits still shows) and shrink the chips
+  // just enough that that many rows fit with no scroll.
   const [gridH, setGridH] = useState(0);
+  const { rows, chip } = gridH > 0
+    ? layoutFor(gridH)
+    : { rows: PAGE_LIMIT / COLS, chip: CHIP_SIZE };
   useEffect(() => {
-    if (gridH > 0 && onCapacity) onCapacity(rowsForHeight(gridH) * COLS);
-  }, [gridH, onCapacity]);
+    if (gridH > 0 && onCapacity) onCapacity(rows * COLS);
+  }, [gridH, rows, onCapacity]);
 
   const renderChip = ({ item }) => {
     const isExcluded = excluded.has(item.id);
     return (
       <TouchableOpacity
-        style={styles.chip}
+        style={[styles.chip, { width: chip, height: chip }]}
         activeOpacity={0.8}
         onPress={() => onToggle(item.id)}
       >
@@ -136,7 +147,7 @@ const ReviewGrid = ({
             </View>
           ) : (
             <FlatList
-              data={faces}
+              data={faces.slice(0, rows * COLS)}
               renderItem={renderChip}
               keyExtractor={(item) => String(item.id)}
               numColumns={COLS}
@@ -206,8 +217,6 @@ const styles = StyleSheet.create({
   grid: { padding: GRID_PADDING },
   gridRow: { gap: GRID_GAP, marginBottom: GRID_GAP },
   chip: {
-    width: CHIP_SIZE,
-    height: CHIP_SIZE,
     borderRadius: 10,
     overflow: 'hidden',
     backgroundColor: '#ddd',
