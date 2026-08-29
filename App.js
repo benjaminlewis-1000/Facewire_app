@@ -548,15 +548,26 @@ export default function App() {
     if (grp) resetFaceAndDrop(grp.viewIndex);
   };
 
-  // Skip: no PATCH -- drop the face from this person's list and move on.
+  // Skip: hide this face from the mobile queue (persisted server-side via
+  // mobile_review_hidden, same flag the ignore-review grid uses) so it
+  // doesn't come back on the next refresh, then drop it from this
+  // person's list and move on. The hide PATCH is fire-and-forget -- a
+  // failed hide just means the face reappears next refresh, not worth
+  // interrupting the skip with an error.
   const skipFace = async () => {
     if (isLoadingContent || actionLock.current) return;
     const grp = groups[groupIndex];
     if (!grp || grp.faceIds[grp.viewIndex] == null) return;
+    const faceId = grp.faceIds[grp.viewIndex];
     actionLock.current = true;
     setActionError('');
     setIsLoadingContent(true);
     try {
+      authedFetch(`${API_BASE}/mobile/hide/`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ face_ids: [faceId] }),
+      }).catch((e) => console.warn('skip: hide PATCH failed:', e));
       await removeCurrentFace(grp.viewIndex);
     } catch (e) {
       console.error('Error skipping face:', e);
