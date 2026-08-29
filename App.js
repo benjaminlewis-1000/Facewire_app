@@ -1248,10 +1248,16 @@ export default function App() {
         </View>
       </Modal>
 
-      {/* Per-person cue on the label screen */}
+      {/* Per-person cue on the label screen. Gated on `screen` so the
+          background queue load doesn't flash this while you're actually
+          on another screen (e.g. right after unlocking). */}
       <ScreenToast
         trigger={personPopup}
-        title={personPopup ? `Confirming faces for ${personPopup.name}` : ''}
+        title={
+          screen === 'label' && personPopup
+            ? `Confirming faces for ${personPopup.name}`
+            : ''
+        }
       />
     </View>
 
