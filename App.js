@@ -810,7 +810,7 @@ export default function App() {
     groups.slice(groupIndex + 1).some((x) => x.frontierIndex < x.faceIds.length);
 
   return (
-    <GestureHandlerRootView>
+    <GestureHandlerRootView style={{ flex: 1 }}>
     <View
       style={styles.container}
       onStartShouldSetResponderCapture={() => {
@@ -1253,41 +1253,40 @@ export default function App() {
         trigger={personPopup}
         title={personPopup ? `Confirming faces for ${personPopup.name}` : ''}
       />
-
-      {screen === 'ignore_review' && (
-        <IgnoreReviewScreen visible onClose={() => setScreen('label')} />
-      )}
-
-      {screen === 'verify_people' && (
-        <VerifyPeopleScreen visible onClose={() => setScreen('label')} />
-      )}
-
-      {screen === 'verify_ignore' && (
-        <VerifyIgnoreScreen visible onClose={() => setScreen('label')} />
-      )}
-
-      {screen === 'settings' && (
-        <SettingsScreen
-          visible
-          onClose={() => setScreen('label')}
-          prefetchCount={prefetchCount}
-          onChangePrefetchCount={updatePrefetchCount}
-          ignorePages={ignorePages}
-          onChangeIgnorePages={updateIgnorePages}
-        />
-      )}
-
-      {/* "Now on X" cue on every screen change */}
-      <ScreenToast trigger={screen} title={SCREEN_TOAST[screen]} />
-
-      {/* Hamburger button -- rendered last so it stays above every screen */}
-      <TouchableOpacity
-        style={styles.hamburgerIcon}
-        onPress={() => setIsMenuVisible(true)}
-      >
-        <Text style={styles.hamburgerText}>☰</Text>
-      </TouchableOpacity>
     </View>
+
+    {/* Full-page screens: siblings of the padded label container so they
+        fill the whole screen (no inherited padding / centering). */}
+    {screen === 'ignore_review' && (
+      <IgnoreReviewScreen visible onClose={() => setScreen('label')} />
+    )}
+    {screen === 'verify_people' && (
+      <VerifyPeopleScreen visible onClose={() => setScreen('label')} />
+    )}
+    {screen === 'verify_ignore' && (
+      <VerifyIgnoreScreen visible onClose={() => setScreen('label')} />
+    )}
+    {screen === 'settings' && (
+      <SettingsScreen
+        visible
+        onClose={() => setScreen('label')}
+        prefetchCount={prefetchCount}
+        onChangePrefetchCount={updatePrefetchCount}
+        ignorePages={ignorePages}
+        onChangeIgnorePages={updateIgnorePages}
+      />
+    )}
+
+    {/* Screen-entry cue for screens without a per-person one */}
+    <ScreenToast trigger={screen} title={SCREEN_TOAST[screen]} />
+
+    {/* Hamburger button -- rendered last so it stays above every screen */}
+    <TouchableOpacity
+      style={styles.hamburgerIcon}
+      onPress={() => setIsMenuVisible(true)}
+    >
+      <Text style={styles.hamburgerText}>☰</Text>
+    </TouchableOpacity>
     </GestureHandlerRootView>
   );
 }

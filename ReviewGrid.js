@@ -18,16 +18,18 @@ export const CHIP_SIZE = Math.floor(
   (width - GRID_PADDING * 2 - GRID_GAP * (COLS - 1)) / COLS
 );
 
-// Rough starting guess for how many faces fit (used only until the grid
-// area reports its real height via onLayout -> onCapacity). Deliberately
-// a bit low so the first render never overflows.
+// Rough starting guess for how many faces fit (used only for the very
+// first render, until the grid area reports its real height via
+// onLayout -> onCapacity). ~284 = fixed chrome (padding + header + meta +
+// hint + footer) above/below the grid.
 const ROW_H = CHIP_SIZE + GRID_GAP;
 export const PAGE_LIMIT =
-  COLS * Math.max(3, Math.min(8, Math.floor((height - 320) / ROW_H)));
+  COLS * Math.max(3, Math.min(9, Math.floor((height - 284) / ROW_H)));
 
 // Given the measured height of the grid area, how many whole rows fit.
+// (+GRID_GAP: the last row doesn't need its trailing marginBottom.)
 const rowsForHeight = (h) =>
-  Math.max(1, Math.floor((h - GRID_PADDING * 2) / ROW_H));
+  Math.max(1, Math.floor((h - GRID_PADDING * 2 + GRID_GAP) / ROW_H));
 
 /**
  * Presentational shell for the tap-to-flag review grids (confirm ignored,
