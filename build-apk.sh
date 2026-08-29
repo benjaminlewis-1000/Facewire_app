@@ -21,29 +21,43 @@ cd "$(dirname "$0")"
 
 PROFILE="preview"
 WAIT_FLAG=""
+GET_ONLY=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --profile) PROFILE="$2"; shift 2 ;;
     --production) PROFILE="production"; shift ;;
     --no-wait) WAIT_FLAG="--no-wait"; shift ;;
-    -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
+    --get) GET_ONLY=1; shift ;;
+    -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
     *) echo "Unknown option: $1" >&2; exit 1 ;;
   esac
 done
 
 EAS="npx --yes eas-cli@latest"
 TOKEN_FILE="${EAS_TOKEN_FILE:-$HOME/.config/photoverify/eas-token}"
+OUT_DIR="$HOME/PhotoVerify-builds"
 
 say() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 die() { printf '\n\033[1;31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
 
 command -v node >/dev/null || die "node is not installed."
 
-# Reuse a saved access token if the env var isn't already set.
 if [[ -z "${EXPO_TOKEN:-}" && -r "$TOKEN_FILE" ]]; then
-  EXPO_TOKEN="$(tr -d '[:space:]' < "$TOKEN_FILE")"
-  export EXPO_TOKEN
+  EXPO_TOKEN="$(tr -d '[:space:]' < "$TOKEN_FILE")"; export EXPO_TOKEN
+fi
+
+# --get: just download the most recent finished Android build, no rebuild.
+if [[ -n "$GET_ONLY" ]]; then
+  say "Fetching the latest finished Android build"
+  URL=$($EAS build:list --platform android --status finished --limit 1 --json --non-interactive 2>/dev/null | node -e \
+    'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{console.log(JSON.parse(d)[0].artifacts.applicationArchiveUrl||"")}catch{console.log("")}})')
+  [[ -n "$URL" ]] || die "No finished build found."
+  mkdir -p "$OUT_DIR"
+  DEST="$OUT_DIR/PhotoVerify-$(date +%Y%m%d-%H%M).apk"
+  curl -fSL -o "$DEST" "$URL"
+  say "Saved: $DEST"
+  exit 0
 fi
 
 say "Checking Expo login"
@@ -74,15 +88,36 @@ say "Starting EAS build  (platform=android, profile=$PROFILE)"
 echo "The keystore is auto-generated and stored on your Expo account the first time."
 $EAS build --platform android --profile "$PROFILE" $NI $WAIT_FLAG
 
-if [[ -z "$WAIT_FLAG" ]]; then
-  say "Done"
-  cat <<'EOF'
-Grab the .apk from the build page URL printed above (or:
-  npx eas-cli build:list --platform android --limit 1
-), then side-load it:  adb install <file>.apk   (or open it on the phone).
+if [[ -n "$WAIT_FLAG" ]]; then
+  cat <<EOF
 
-The standalone app uses the redirect URI  photoverify://redirect  --
-already registered in Authelia's photoverify_mobile client, so sign-in
-works without any further config.
+Build queued. Watch it / grab the APK from the build page URL above, or run
+  ./build-apk.sh --get
+once it finishes.
 EOF
+  exit 0
 fi
+
+# Build ran to completion (no --no-wait) -> pull the artifact down.
+say "Downloading the finished APK"
+APK_URL=$($EAS build:view --json 2>/dev/null | node -e \
+  'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{console.log(JSON.parse(d).artifacts.applicationArchiveUrl||"")}catch{console.log("")}})')
+if [[ -z "$APK_URL" ]]; then
+  APK_URL=$($EAS build:list --platform android --limit 1 --json --non-interactive 2>/dev/null | node -e \
+    'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{console.log(JSON.parse(d)[0].artifacts.applicationArchiveUrl||"")}catch{console.log("")}})')
+fi
+if [[ -n "$APK_URL" ]]; then
+  mkdir -p "$OUT_DIR"
+  DEST="$OUT_DIR/PhotoVerify-$PROFILE-$(date +%Y%m%d-%H%M).apk"
+  curl -fSL -o "$DEST" "$APK_URL"
+  say "Saved: $DEST"
+else
+  echo "Could not resolve the artifact URL -- grab it from the build page above." >&2
+fi
+
+cat <<'EOF'
+
+Side-load it:  adb install <file>.apk   (or copy to the phone and open it).
+Sign-in works out of the box: the standalone app's redirect URI
+  photoverify://redirect  is already in Authelia's photoverify_mobile client.
+EOF
