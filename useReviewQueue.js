@@ -144,21 +144,12 @@ export default function useReviewQueue({
       const flag = faces.filter((f) => excluded.has(f.id)).map((f) => f.id);
       const consumed = faces.length;
 
-      const body = buildBody(keep, flag);
-      console.log(
-        '[review submit]',
-        submitUrl,
-        'excluded=', [...excluded],
-        'body=', JSON.stringify(body)
-      );
       authedFetch(submitUrl, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify(buildBody(keep, flag)),
       })
-        .then(async (resp) => {
-          const txt = await resp.text().catch(() => '');
-          console.log('[review submit] response', resp.status, txt);
+        .then((resp) => {
           if (!resp.ok) setError("Couldn't save that batch — it may need redoing.");
         })
         .catch((e) => {
