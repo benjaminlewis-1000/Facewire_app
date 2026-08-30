@@ -11,7 +11,14 @@ jest.mock('expo-auth-session', () => ({
 
 import * as SecureStore from 'expo-secure-store';
 import * as AuthSession from 'expo-auth-session';
-import { authedFetch, getValidIdToken } from '../auth';
+import {
+  authedFetch,
+  getValidIdToken,
+  refreshTokens,
+  saveTokenResponse,
+  signOut,
+  lockSession,
+} from '../auth';
 
 const FAR_FUTURE = String(Math.floor(Date.now() / 1000) + 3600);
 
@@ -126,5 +133,67 @@ describe('getValidIdToken (proactive refresh)', () => {
     setExp(-10);
     AuthSession.refreshAsync.mockResolvedValueOnce({ idToken: 'FRESH' });
     expect(await getValidIdToken()).toBe('FRESH');
+  });
+});
+
+describe('refreshTokens', () => {
+  const tick = () => new Promise((r) => setImmediate(r));
+
+  test('concurrent callers share ONE in-flight refresh (no token-rotation storm)', async () => {
+    let resolveRefresh;
+    AuthSession.refreshAsync.mockImplementationOnce(
+      () => new Promise((r) => { resolveRefresh = r; })
+    );
+
+    const all = Promise.all([refreshTokens(), refreshTokens(), refreshTokens()]);
+    // let the shared async body get as far as calling refreshAsync
+    while (!resolveRefresh) await tick();
+    resolveRefresh({ idToken: 'FRESH', refreshToken: 'ROTATED' });
+    await all;
+
+    expect(AuthSession.refreshAsync).toHaveBeenCalledTimes(1);
+  });
+
+  test('a new refresh can happen after the previous one settled', async () => {
+    AuthSession.refreshAsync
+      .mockResolvedValueOnce({ idToken: 'A' })
+      .mockResolvedValueOnce({ idToken: 'B' });
+    await refreshTokens();
+    await refreshTokens();
+    expect(AuthSession.refreshAsync).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('token storage', () => {
+  test('saveTokenResponse only overwrites the refresh token when a new one is returned', async () => {
+    await saveTokenResponse({ idToken: 'i', accessToken: 'a' }); // no refreshToken
+    const keys = SecureStore.setItemAsync.mock.calls.map(([k]) => k);
+    expect(keys).not.toContain('pv_refresh_token');
+
+    SecureStore.setItemAsync.mockClear();
+    await saveTokenResponse({ idToken: 'i', refreshToken: 'r2' });
+    expect(SecureStore.setItemAsync).toHaveBeenCalledWith('pv_refresh_token', 'r2');
+  });
+
+  test('signOut clears everything including the refresh token', async () => {
+    await signOut();
+    const cleared = SecureStore.deleteItemAsync.mock.calls.map(([k]) => k);
+    expect(cleared).toEqual(
+      expect.arrayContaining([
+        'pv_refresh_token',
+        'pv_id_token',
+        'pv_access_token',
+        'pv_id_token_exp',
+      ])
+    );
+  });
+
+  test('lockSession drops the session tokens but KEEPS the refresh token', async () => {
+    await lockSession();
+    const cleared = SecureStore.deleteItemAsync.mock.calls.map(([k]) => k);
+    expect(cleared).toEqual(
+      expect.arrayContaining(['pv_id_token', 'pv_id_token_exp', 'pv_access_token'])
+    );
+    expect(cleared).not.toContain('pv_refresh_token');
   });
 });
