@@ -48,7 +48,7 @@ const layoutFor = (h) => {
  * stack, so the photo grid starts at the same Y on all of them.
  *
  * Props:
- *   visible, onClose
+ *   visible
  *   title            banner text (what screen you're on)
  *   hint             instruction under the banner (clamped to 2 lines)
  *   meta             optional node for the fixed-height row below the
@@ -68,7 +68,6 @@ const layoutFor = (h) => {
  */
 const ReviewGrid = ({
   visible,
-  onClose,
   title,
   hint,
   meta = null,
@@ -122,12 +121,11 @@ const ReviewGrid = ({
 
   return (
       <View style={styles.container}>
-        {/* Fixed header stack -- identical geometry on every grid screen */}
+        {/* Fixed header stack -- identical geometry on every grid screen.
+            No close button: navigate via the hamburger menu, same as the
+            label screen. */}
         <View style={styles.header}>
           <Text style={styles.title} numberOfLines={1}>{title}</Text>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton} hitSlop={12}>
-            <Text style={styles.closeText}>✕</Text>
-          </TouchableOpacity>
         </View>
         <View style={styles.metaRow}>{meta}</View>
         <Text style={styles.hint} numberOfLines={1}>{hint}</Text>
@@ -196,8 +194,6 @@ const styles = StyleSheet.create({
     paddingRight: 16,
   },
   title: { flex: 1, fontSize: 18, fontWeight: 'bold', color: '#333' },
-  closeButton: { padding: 6 },
-  closeText: { fontSize: 20, color: '#555', fontWeight: 'bold' },
   metaRow: {
     height: 34,
     flexDirection: 'row',
