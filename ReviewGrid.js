@@ -147,7 +147,8 @@ const ReviewGrid = ({
             </View>
           ) : (
             <FlatList
-              data={faces.slice(0, rows * COLS)}
+              data={faces}
+              extraData={excluded}
               renderItem={renderChip}
               keyExtractor={(item) => String(item.id)}
               numColumns={COLS}
