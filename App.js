@@ -277,7 +277,7 @@ export default function App() {
   // app has been backgrounded for more than a brief grace period, or when
   // it's been sitting in the foreground untouched past the idle timeout.
   const LOCK_ON_BACKGROUND_GRACE_MS = 10000; // ride out biometric prompts / quick app switches
-  const IDLE_LOCK_MS = 10 * 60 * 1000; // 10 minutes of no touches
+  const IDLE_LOCK_MS = 3 * 60 * 1000; // 3 minutes of no touches (any screen)
   const backgroundedAt = useRef(null);
   const lastActivityAt = useRef(Date.now());
 
