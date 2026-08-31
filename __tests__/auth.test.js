@@ -93,12 +93,36 @@ test('401 after refresh -> authError', async () => {
   expect(r.authError).toBe(true);
 });
 
-test('token refresh fails -> authError, no retry', async () => {
-  AuthSession.refreshAsync.mockRejectedValueOnce(new Error('bad refresh token'));
+test('refresh token genuinely rejected (invalid_grant) -> authError', async () => {
+  const err = new Error('The refresh token is invalid.');
+  err.code = 'invalid_grant';
+  AuthSession.refreshAsync.mockRejectedValue(err);
   global.fetch.mockResolvedValueOnce({ ok: false, status: 401 });
   const r = await authedFetch('http://x/');
   expect(r.authError).toBe(true);
-  expect(global.fetch).toHaveBeenCalledTimes(1);
+  // invalid_grant is terminal -- no point retrying the refresh.
+  expect(AuthSession.refreshAsync).toHaveBeenCalledTimes(1);
+});
+
+test('transient refresh failure -> networkError (session kept), refresh retried', async () => {
+  AuthSession.refreshAsync.mockRejectedValue(new Error('Network request failed'));
+  global.fetch.mockResolvedValueOnce({ ok: false, status: 401 });
+  const r = await authedFetch('http://x/');
+  expect(r.networkError).toBe(true);
+  expect(r.authError).toBeUndefined();
+  expect(AuthSession.refreshAsync).toHaveBeenCalledTimes(3); // 1 + 2 retries
+});
+
+test('refresh recovers on a retry after a transient blip', async () => {
+  AuthSession.refreshAsync
+    .mockRejectedValueOnce(new Error('timeout'))
+    .mockResolvedValueOnce({ idToken: 'NEW', refreshToken: 'R2' });
+  global.fetch
+    .mockResolvedValueOnce({ ok: false, status: 401 })
+    .mockResolvedValueOnce({ ok: true, status: 200 });
+  const r = await authedFetch('http://x/');
+  expect(r.status).toBe(200);
+  expect(AuthSession.refreshAsync).toHaveBeenCalledTimes(2);
 });
 
 describe('getValidIdToken (proactive refresh)', () => {

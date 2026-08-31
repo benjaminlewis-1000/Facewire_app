@@ -90,17 +90,52 @@ export async function hasRefreshToken() {
 // refresh that all callers await.
 let _refreshInFlight = null;
 
+const REFRESH_MAX_ATTEMPTS = 3;
+const REFRESH_BACKOFF_MS = 700;
+
+// OAuth error codes that mean the refresh token is genuinely dead --
+// retrying won't help, the user must do the full browser sign-in again.
+// Anything else (network drop, Authelia 5xx, timeout) is transient.
+const HARD_OAUTH_ERRORS = ['invalid_grant', 'invalid_client', 'unauthorized_client'];
+
+const hardAuthError = (msg) => {
+  const e = new Error(msg);
+  e.hardAuthFailure = true;
+  return e;
+};
+
+async function refreshWithRetry(refreshToken, discovery) {
+  let lastErr;
+  for (let attempt = 1; attempt <= REFRESH_MAX_ATTEMPTS; attempt++) {
+    try {
+      return await AuthSession.refreshAsync(
+        { clientId: CLIENT_ID, refreshToken, scopes: SCOPES },
+        discovery
+      );
+    } catch (e) {
+      lastErr = e;
+      if (HARD_OAUTH_ERRORS.includes(e && e.code)) {
+        e.hardAuthFailure = true;
+        throw e;
+      }
+      if (attempt < REFRESH_MAX_ATTEMPTS) {
+        await sleep(REFRESH_BACKOFF_MS * 2 ** (attempt - 1));
+      }
+    }
+  }
+  // Transient failures exhausted -- NOT a hard auth failure; the caller
+  // should surface a "try again" state, not wipe the session.
+  throw lastErr || new Error('refresh_failed');
+}
+
 export function refreshTokens() {
   if (_refreshInFlight) return _refreshInFlight;
   _refreshInFlight = (async () => {
     try {
       const refreshToken = await SecureStore.getItemAsync(KEYS.refresh);
-      if (!refreshToken) throw new Error('no_refresh_token');
+      if (!refreshToken) throw hardAuthError('no_refresh_token');
       const discovery = await getDiscovery();
-      const result = await AuthSession.refreshAsync(
-        { clientId: CLIENT_ID, refreshToken, scopes: SCOPES },
-        discovery
-      );
+      const result = await refreshWithRetry(refreshToken, discovery);
       await saveTokenResponse(result);
       return result;
     } finally {
@@ -177,9 +212,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  *  - automatic retry with backoff on network failure / 5xx (not on 4xx)
  *
  * Never throws. On unrecoverable failure returns a sentinel:
- *  - { ok:false, status:401, authError:true }   token unavailable / rejected
+ *  - { ok:false, status:401, authError:true }   refresh token genuinely
+ *    rejected (invalid_grant) -> caller should sign the user out
  *  - { ok:false, status:0,   networkError:true } offline / timeout / server
- *    unreachable after retries
+ *    unreachable / couldn't reach Authelia to refresh -> caller should
+ *    show a retry state, NOT drop the session
  * Otherwise returns the real Response (4xx included, for the caller to read).
  */
 export async function authedFetch(url, options = {}) {
@@ -187,7 +224,9 @@ export async function authedFetch(url, options = {}) {
   try {
     idToken = await getValidIdToken();
   } catch (e) {
-    return { ok: false, status: 401, authError: true };
+    return e && e.hardAuthFailure
+      ? { ok: false, status: 401, authError: true }
+      : { ok: false, status: 0, networkError: true };
   }
 
   const withAuth = (tok) => ({
@@ -215,7 +254,10 @@ export async function authedFetch(url, options = {}) {
       try {
         idToken = await forceRefreshIdToken();
       } catch (e) {
-        response.authError = true;
+        // Only a genuinely-dead refresh token is an auth failure; a
+        // transient inability to reach Authelia is a network error.
+        if (e && e.hardAuthFailure) response.authError = true;
+        else response.networkError = true;
         return response;
       }
       try {
@@ -224,6 +266,8 @@ export async function authedFetch(url, options = {}) {
         lastNetworkErr = e;
         break;
       }
+      // Fresh token still rejected -> a real auth problem (the backend
+      // returns 503, not 401, when it merely can't reach Authelia's JWKS).
       if (response.status === 401 || response.status === 403) {
         response.authError = true;
       }

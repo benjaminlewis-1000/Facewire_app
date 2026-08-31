@@ -276,8 +276,8 @@ export default function App() {
   // Auto-lock: drop the session (fingerprint required to return) when the
   // app has been backgrounded for more than a brief grace period, or when
   // it's been sitting in the foreground untouched past the idle timeout.
-  const LOCK_ON_BACKGROUND_GRACE_MS = 2000; // filters transient inactive states
-  const IDLE_LOCK_MS = 3 * 60 * 1000; // 3 minutes of no touches
+  const LOCK_ON_BACKGROUND_GRACE_MS = 10000; // ride out biometric prompts / quick app switches
+  const IDLE_LOCK_MS = 10 * 60 * 1000; // 10 minutes of no touches
   const backgroundedAt = useRef(null);
   const lastActivityAt = useRef(Date.now());
 
@@ -812,12 +812,16 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
     <View
-      style={styles.container}
+      style={{ flex: 1 }}
       onStartShouldSetResponderCapture={() => {
+        // Any touch on ANY screen counts as activity for the idle-lock
+        // timer. (The full-page review screens render below, as siblings
+        // of styles.container -- this wrapper covers them too.)
         registerActivity();
         return false; // passive: let children handle the touch
       }}
     >
+    <View style={styles.container}>
       {screen === 'label' && (
        <>
       {/* Face nav (within the current person's list) */}
@@ -1293,6 +1297,7 @@ export default function App() {
     >
       <Text style={styles.hamburgerText}>☰</Text>
     </TouchableOpacity>
+    </View>
     </GestureHandlerRootView>
   );
 }
