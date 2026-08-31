@@ -34,7 +34,21 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-EAS="npx --yes eas-cli@latest"
+# Prefer an already-installed eas-cli (global, or one npx has cached from a
+# previous run) -- re-downloading eas-cli@latest on every build is ~400 MB
+# of npm traffic that's slow and flaky. Fall back to npx only if nothing
+# is cached.
+_find_cached_eas() {
+  command -v eas >/dev/null 2>&1 && { echo "eas"; return; }
+  local b
+  for b in "$HOME"/.npm/_npx/*/node_modules/.bin/eas; do
+    [ -x "$b" ] && { echo "$b"; return; }
+  done
+  echo ""
+}
+EAS="$(_find_cached_eas)"
+[ -n "$EAS" ] || EAS="npx --yes eas-cli@latest"
+
 TOKEN_FILE="${EAS_TOKEN_FILE:-$HOME/.config/photoverify/eas-token}"
 OUT_DIR="$HOME/PhotoVerify-builds"
 
