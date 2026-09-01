@@ -36,6 +36,7 @@ const baseProps = (over = {}) => ({
   submitUrl: 'https://x/api/mobile/bulk_verify/',
   buildBody: (verify_ids, reset_ids) => ({ verify_ids, reset_ids }),
   fetchPage: jest.fn(async () => ({ faces: mkFaces(20) })),
+  cooldownMs: 0, // the post-page submit cooldown has its own dedicated test
   ...over,
 });
 
@@ -153,6 +154,24 @@ test('faces already shown are not served again (seen dedupe)', async () => {
   await act(async () => { await latest.reload(); });
   const lastSeen = seenSeen[seenSeen.length - 1];
   expect(lastSeen).toEqual(expect.arrayContaining([1, 2, 3]));
+});
+
+test('submit is blocked for a brief cooldown after a new page appears, then allowed', async () => {
+  const props = baseProps({ cooldownMs: 60 });
+  await mount(props);
+  expect(latest.cooldown).toBe(true);
+
+  // A fast double-tap right after the page loaded must not submit.
+  const blocked = await act(async () => latest.submit());
+  expect(blocked).toBe(false);
+  expect(authedFetch).not.toHaveBeenCalled();
+
+  await act(async () => { await new Promise((r) => setTimeout(r, 80)); });
+  expect(latest.cooldown).toBe(false);
+
+  const allowed = await act(async () => latest.submit());
+  expect(allowed).toBe(true);
+  expect(authedFetch).toHaveBeenCalledTimes(1);
 });
 
 test('pageSize change re-windows the visible faces', async () => {

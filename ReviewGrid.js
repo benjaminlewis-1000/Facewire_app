@@ -59,7 +59,10 @@ const layoutFor = (h) => {
  *   onToggle(id)
  *   loading          true when there's nothing to show yet (full spinner)
  *   busy             true while a submit is in flight (button disabled,
- *                    grid stays put -- no spinner)
+ *                    shows '…', grid stays put -- no spinner)
+ *   cooldown         true for a brief moment after a new page appears --
+ *                    button disabled (no text change) so a fast
+ *                    double-tap can't also submit the next screenful
  *   error            message string or ''
  *   emptyTitle, emptyBody
  *   submitLabel      button text
@@ -76,6 +79,7 @@ const ReviewGrid = ({
   onToggle,
   loading,
   busy = false,
+  cooldown = false,
   error,
   emptyTitle = 'All caught up',
   emptyBody = 'Nothing to review right now.',
@@ -165,10 +169,10 @@ const ReviewGrid = ({
             style={[
               styles.submitButton,
               { backgroundColor: accent },
-              busy && styles.submitButtonBusy,
+              (busy || cooldown) && styles.submitButtonBusy,
             ]}
             onPress={onSubmit}
-            disabled={busy}
+            disabled={busy || cooldown}
           >
             <Text style={styles.submitButtonText}>
               {busy ? '…' : submitLabel}

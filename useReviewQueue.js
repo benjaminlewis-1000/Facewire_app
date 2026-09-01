@@ -24,10 +24,12 @@ import { PAGE_LIMIT } from './ReviewGrid';
  *   submitUrl        the bulk-action endpoint
  *   onPage(meta)     optional; runs after each fetch with that fetch's meta
  *
- * Returns { faces, excluded, toggle, loading, busy, error, submit, reload,
- * setError }. `submit` returns true once the write landed (so callers with
- * their own running totals only advance them on success).
+ * Returns { faces, excluded, toggle, loading, busy, cooldown, error, submit,
+ * reload, setError }. `submit` returns true once the write landed (so
+ * callers with their own running totals only advance them on success).
  */
+const SUBMIT_COOLDOWN_MS = 500;
+
 export default function useReviewQueue({
   visible,
   fetchPage,
@@ -35,18 +37,33 @@ export default function useReviewQueue({
   submitUrl,
   onPage,
   pageSize = PAGE_LIMIT,
+  cooldownMs = SUBMIT_COOLDOWN_MS, // overridable in tests
 }) {
   const page = Math.max(3, pageSize || PAGE_LIMIT);
   const [faces, setFaces] = useState([]);
   const [excluded, setExcluded] = useState(() => new Set());
   const [loading, setLoading] = useState(true); // nothing to show yet
   const [busy, setBusy] = useState(false); // a submit is in flight
+  // Briefly true right after a new page appears, so a fast double-tap
+  // that lands the submit button doesn't also fire it on the next
+  // (different) screenful.
+  const [cooldown, setCooldown] = useState(false);
   const [error, setError] = useState('');
 
   const seen = useRef(new Set());
   const bufferRef = useRef([]);
   const inFlightRef = useRef(null);
   const submitLockRef = useRef(false);
+  const cooldownTimerRef = useRef(null);
+
+  const armCooldown = useCallback(() => {
+    if (cooldownMs <= 0) return;
+    setCooldown(true);
+    if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current);
+    cooldownTimerRef.current = setTimeout(() => setCooldown(false), cooldownMs);
+  }, [cooldownMs]);
+
+  useEffect(() => () => clearTimeout(cooldownTimerRef.current), []);
 
   // Pull one batch from the screen and append the genuinely-new faces to
   // the buffer. Returns how many were added.
@@ -82,7 +99,8 @@ export default function useReviewQueue({
   const showWindow = useCallback(() => {
     setFaces(bufferRef.current.slice(0, page));
     setExcluded(new Set());
-  }, [page]);
+    armCooldown();
+  }, [page, armCooldown]);
 
   // Keep fetching until the buffer holds `want` faces or the source dries
   // up. One extra try after a no-progress fetch covers the case where the
@@ -137,7 +155,7 @@ export default function useReviewQueue({
   // dismissible banner; the already-shown faces are in `seen` so they
   // won't cycle back. Returns true once the advance has kicked off.
   const submit = useCallback(async () => {
-    if (submitLockRef.current || loading || faces.length === 0) return false;
+    if (submitLockRef.current || loading || cooldown || faces.length === 0) return false;
     submitLockRef.current = true;
     try {
       const keep = faces.filter((f) => !excluded.has(f.id)).map((f) => f.id);
@@ -172,7 +190,18 @@ export default function useReviewQueue({
     } finally {
       submitLockRef.current = false;
     }
-  }, [loading, faces, excluded, buildBody, submitUrl, fill, showWindow, page]);
+  }, [loading, cooldown, faces, excluded, buildBody, submitUrl, fill, showWindow, page]);
 
-  return { faces, excluded, toggle, loading, busy, error, submit, reload: load, setError };
+  return {
+    faces,
+    excluded,
+    toggle,
+    loading,
+    busy,
+    cooldown,
+    error,
+    submit,
+    reload: load,
+    setError,
+  };
 }

@@ -54,6 +54,7 @@ const VerifyIgnoreScreen = ({ visible, onClose }) => {
       onCapacity={setPageSize}
       loading={q.loading}
       busy={q.busy}
+      cooldown={q.cooldown}
       error={q.error}
       emptyBody={q.error || 'No unverified ignored faces left.'}
       submitLabel={submitLabel}

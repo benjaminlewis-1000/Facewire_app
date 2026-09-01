@@ -127,6 +127,7 @@ const VerifyPeopleScreen = ({ visible, onClose }) => {
         onCapacity={setPageSize}
         loading={q.loading}
         busy={q.busy}
+        cooldown={q.cooldown}
         error={q.error}
         emptyBody={q.error || 'No unverified faces for any named person.'}
         submitLabel={submitLabel}

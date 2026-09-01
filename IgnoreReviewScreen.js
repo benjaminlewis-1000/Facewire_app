@@ -51,6 +51,7 @@ const IgnoreReviewScreen = ({ visible, onClose }) => {
       onCapacity={setPageSize}
       loading={q.loading}
       busy={q.busy}
+      cooldown={q.cooldown}
       error={q.error}
       emptyBody={q.error || 'No faces are currently guessed as “ignore”.'}
       submitLabel={submitLabel}
