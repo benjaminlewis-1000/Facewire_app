@@ -174,6 +174,96 @@ test('submit is blocked for a brief cooldown after a new page appears, then allo
   expect(authedFetch).toHaveBeenCalledTimes(1);
 });
 
+describe('undo last screen', () => {
+  const patchBodies = () =>
+    authedFetch.mock.calls
+      .filter(([, o]) => o && o.method === 'PATCH')
+      .map(([url, o]) => ({ url, body: JSON.parse(o.body) }));
+
+  test('canUndo is false until a forward submit, then true', async () => {
+    await mount(baseProps());
+    expect(latest.canUndo).toBe(false);
+    await act(async () => { await latest.submit(); });
+    expect(latest.canUndo).toBe(true);
+    expect(latest.undoing).toBe(false);
+  });
+
+  test('beginUndo re-shows the previous screenful; submitUndo resets the tapped ids and returns forward', async () => {
+    await mount(baseProps());
+    // Forward-submit page 1 (ids 1..6), landing on page 2 (ids 7..12).
+    await act(async () => { await latest.submit(); });
+    expect(latest.faces.map((f) => f.id)).toEqual([7, 8, 9, 10, 11, 12]);
+    authedFetch.mockClear();
+
+    await act(async () => latest.beginUndo());
+    expect(latest.undoing).toBe(true);
+    expect(latest.faces.map((f) => f.id)).toEqual([1, 2, 3, 4, 5, 6]);
+
+    await act(async () => { latest.toggle(2); latest.toggle(5); });
+    let n;
+    await act(async () => { n = await latest.submitUndo(); });
+
+    expect(n).toBe(2);
+    expect(patchBodies()).toEqual([
+      { url: 'https://x/api/mobile/bulk_verify/', body: { verify_ids: [], reset_ids: [2, 5] } },
+    ]);
+    // Back on the forward view, undo consumed.
+    expect(latest.undoing).toBe(false);
+    expect(latest.canUndo).toBe(false);
+    expect(latest.faces.map((f) => f.id)).toEqual([7, 8, 9, 10, 11, 12]);
+  });
+
+  test('submitUndo with nothing tapped sends no PATCH and just returns forward', async () => {
+    await mount(baseProps());
+    await act(async () => { await latest.submit(); });
+    authedFetch.mockClear();
+
+    await act(async () => latest.beginUndo());
+    let n;
+    await act(async () => { n = await latest.submitUndo(); });
+
+    expect(n).toBe(0);
+    expect(authedFetch).not.toHaveBeenCalled();
+    expect(latest.undoing).toBe(false);
+    expect(latest.faces.map((f) => f.id)).toEqual([7, 8, 9, 10, 11, 12]);
+  });
+
+  test('cancelUndo restores the forward view with no PATCH', async () => {
+    await mount(baseProps());
+    await act(async () => { await latest.submit(); });
+    authedFetch.mockClear();
+
+    await act(async () => latest.beginUndo());
+    await act(async () => latest.toggle(3));
+    await act(async () => latest.cancelUndo());
+
+    expect(authedFetch).not.toHaveBeenCalled();
+    expect(latest.undoing).toBe(false);
+    expect(latest.canUndo).toBe(false);
+    expect(latest.faces.map((f) => f.id)).toEqual([7, 8, 9, 10, 11, 12]);
+  });
+
+  test('buildUndoBody override controls the undo endpoint + payload shape', async () => {
+    const props = baseProps({
+      submitUrl: 'https://x/api/mobile/bulk_confirm_ignore/',
+      buildBody: (confirm_ids, hide_ids) => ({ confirm_ids, hide_ids }),
+      undoUrl: 'https://x/api/mobile/bulk_verify/',
+      buildUndoBody: (reset_ids) => ({ verify_ids: [], reset_ids }),
+    });
+    await mount(props);
+    await act(async () => { await latest.submit(); });
+    authedFetch.mockClear();
+
+    await act(async () => latest.beginUndo());
+    await act(async () => latest.toggle(4));
+    await act(async () => { await latest.submitUndo(); });
+
+    expect(patchBodies()).toEqual([
+      { url: 'https://x/api/mobile/bulk_verify/', body: { verify_ids: [], reset_ids: [4] } },
+    ]);
+  });
+});
+
 test('pageSize change re-windows the visible faces', async () => {
   const tr = await mount(baseProps({ pageSize: 6 }));
   expect(latest.faces.length).toBe(6);

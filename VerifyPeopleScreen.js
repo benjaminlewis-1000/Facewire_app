@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef } from 'react';
 import { StyleSheet, Text, TouchableOpacity } from 'react-native';
 
 import { authedFetch, API_BASE } from './auth';
-import ReviewGrid, { PAGE_LIMIT } from './ReviewGrid';
+import ReviewGrid, { PAGE_LIMIT, UndoButton, CancelUndoLink } from './ReviewGrid';
 import useReviewQueue from './useReviewQueue';
 import ScreenToast from './ScreenToast';
 
@@ -95,14 +95,19 @@ const VerifyPeopleScreen = ({ visible, onClose }) => {
 
   const resetCount = q.faces.filter((f) => q.excluded.has(f.id)).length;
   const verifyCount = q.faces.length - resetCount;
-  const submitLabel =
-    verifyCount > 0
-      ? `Verify ${verifyCount}` + (resetCount ? `  ·  reset ${resetCount}` : '')
-      : `Reset ${resetCount}`;
+  const submitLabel = q.undoing
+    ? resetCount
+      ? `Reprocess ${resetCount}`
+      : 'Done'
+    : verifyCount > 0
+    ? `Verify ${verifyCount}` + (resetCount ? `  ·  reset ${resetCount}` : '')
+    : `Reset ${resetCount}`;
 
   const active = person && q.faces.length;
 
-  const meta = active ? (
+  const meta = q.undoing ? (
+    <CancelUndoLink onPress={q.cancelUndo} />
+  ) : active ? (
     <>
       <Text style={styles.metaCount}>
         {typeof remaining === 'number' ? `~${remaining} left` : ' '}
@@ -118,8 +123,19 @@ const VerifyPeopleScreen = ({ visible, onClose }) => {
       <ReviewGrid
         visible={visible}
         onClose={onClose}
-        title={active ? `Verify people · ${person.name}` : 'Verify people'}
-        hint="Tap the wrong ones to send them back for reprocessing."
+        title={
+          q.undoing
+            ? 'Fix last screen'
+            : active
+            ? `Verify people · ${person.name}`
+            : 'Verify people'
+        }
+        headerAction={q.canUndo ? <UndoButton onPress={q.beginUndo} /> : null}
+        hint={
+          q.undoing
+            ? 'Tap the faces that should be reprocessed, not verified.'
+            : 'Tap the wrong ones to send them back for reprocessing.'
+        }
         meta={meta}
         faces={q.faces}
         excluded={q.excluded}
@@ -131,8 +147,8 @@ const VerifyPeopleScreen = ({ visible, onClose }) => {
         error={q.error}
         emptyBody={q.error || 'No unverified faces for any named person.'}
         submitLabel={submitLabel}
-        onSubmit={onSubmit}
-        accent="#2E7D32"
+        onSubmit={q.undoing ? q.submitUndo : onSubmit}
+        accent={q.undoing ? '#8E44AD' : '#2E7D32'}
       />
       {/* Per-person cue (fires on each person, including the first). */}
       <ScreenToast

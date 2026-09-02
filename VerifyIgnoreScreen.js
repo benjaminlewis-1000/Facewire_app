@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 
 import { authedFetch, API_BASE } from './auth';
-import ReviewGrid, { PAGE_LIMIT } from './ReviewGrid';
+import ReviewGrid, { PAGE_LIMIT, UndoButton, CancelUndoLink } from './ReviewGrid';
 import useReviewQueue from './useReviewQueue';
 
 /**
@@ -37,17 +37,26 @@ const VerifyIgnoreScreen = ({ visible, onClose }) => {
 
   const resetCount = q.faces.filter((f) => q.excluded.has(f.id)).length;
   const keepCount = q.faces.length - resetCount;
-  const submitLabel =
-    keepCount > 0
-      ? `Keep ignored ${keepCount}` + (resetCount ? `  ·  reset ${resetCount}` : '')
-      : `Reset ${resetCount}`;
+  const submitLabel = q.undoing
+    ? resetCount
+      ? `Reprocess ${resetCount}`
+      : 'Done'
+    : keepCount > 0
+    ? `Keep ignored ${keepCount}` + (resetCount ? `  ·  reset ${resetCount}` : '')
+    : `Reset ${resetCount}`;
 
   return (
     <ReviewGrid
       visible={visible}
       onClose={onClose}
-      title="Verify ignored faces"
-      hint="Tap real people to send them back for reprocessing."
+      title={q.undoing ? 'Fix last screen' : 'Verify ignored faces'}
+      headerAction={q.canUndo ? <UndoButton onPress={q.beginUndo} /> : null}
+      meta={q.undoing ? <CancelUndoLink onPress={q.cancelUndo} /> : null}
+      hint={
+        q.undoing
+          ? 'Tap the faces that should be reprocessed instead of kept as ignored.'
+          : 'Tap real people to send them back for reprocessing.'
+      }
       faces={q.faces}
       excluded={q.excluded}
       onToggle={q.toggle}
@@ -58,8 +67,8 @@ const VerifyIgnoreScreen = ({ visible, onClose }) => {
       error={q.error}
       emptyBody={q.error || 'No unverified ignored faces left.'}
       submitLabel={submitLabel}
-      onSubmit={q.submit}
-      accent="#00695C"
+      onSubmit={q.undoing ? q.submitUndo : q.submit}
+      accent={q.undoing ? '#8E44AD' : '#00695C'}
     />
   );
 };

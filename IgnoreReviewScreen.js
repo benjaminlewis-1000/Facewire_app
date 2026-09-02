@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 
 import { authedFetch, API_BASE } from './auth';
-import ReviewGrid, { PAGE_LIMIT } from './ReviewGrid';
+import ReviewGrid, { PAGE_LIMIT, UndoButton, CancelUndoLink } from './ReviewGrid';
 import useReviewQueue from './useReviewQueue';
 
 /**
@@ -30,21 +30,35 @@ const IgnoreReviewScreen = ({ visible, onClose }) => {
     pageSize,
     submitUrl: `${API_BASE}/mobile/bulk_confirm_ignore/`,
     buildBody: (confirm_ids, hide_ids) => ({ confirm_ids, hide_ids }),
+    // bulk_confirm_ignore has no reset path -- route "undo" through
+    // bulk_verify, whose reset_ids loop sends any face back to the pool.
+    undoUrl: `${API_BASE}/mobile/bulk_verify/`,
+    buildUndoBody: (reset_ids) => ({ verify_ids: [], reset_ids }),
   });
 
-  const hideCount = q.faces.filter((f) => q.excluded.has(f.id)).length;
+  const backCount = q.faces.filter((f) => q.excluded.has(f.id)).length;
+  const hideCount = q.undoing ? 0 : backCount;
   const confirmCount = q.faces.length - hideCount;
-  const submitLabel =
-    confirmCount > 0
-      ? `Ignore ${confirmCount}` + (hideCount ? `  ·  hide ${hideCount}` : '')
-      : `Hide ${hideCount}`;
+  const submitLabel = q.undoing
+    ? backCount
+      ? `Reprocess ${backCount}`
+      : 'Done'
+    : confirmCount > 0
+    ? `Ignore ${confirmCount}` + (hideCount ? `  ·  hide ${hideCount}` : '')
+    : `Hide ${hideCount}`;
 
   return (
     <ReviewGrid
       visible={visible}
       onClose={onClose}
-      title="Confirm ignored faces"
-      hint="Tap any you don't want to decide on — it won't show here again."
+      title={q.undoing ? 'Fix last screen' : 'Confirm ignored faces'}
+      headerAction={q.canUndo ? <UndoButton onPress={q.beginUndo} /> : null}
+      meta={q.undoing ? <CancelUndoLink onPress={q.cancelUndo} /> : null}
+      hint={
+        q.undoing
+          ? 'Tap the faces that should be reprocessed instead of ignored.'
+          : "Tap any you don't want to decide on — it won't show here again."
+      }
       faces={q.faces}
       excluded={q.excluded}
       onToggle={q.toggle}
@@ -55,8 +69,8 @@ const IgnoreReviewScreen = ({ visible, onClose }) => {
       error={q.error}
       emptyBody={q.error || 'No faces are currently guessed as “ignore”.'}
       submitLabel={submitLabel}
-      onSubmit={q.submit}
-      accent="#C0392B"
+      onSubmit={q.undoing ? q.submitUndo : q.submit}
+      accent={q.undoing ? '#8E44AD' : '#C0392B'}
     />
   );
 };

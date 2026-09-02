@@ -50,6 +50,8 @@ const layoutFor = (h) => {
  * Props:
  *   visible
  *   title            banner text (what screen you're on)
+ *   headerAction     optional node, right-aligned in the header row
+ *                    (e.g. the "Undo last" button)
  *   hint             instruction under the banner (clamped to 2 lines)
  *   meta             optional node for the fixed-height row below the
  *                    banner (e.g. "~N left" + Skip person); the row is
@@ -69,9 +71,27 @@ const layoutFor = (h) => {
  *   onSubmit
  *   accent           button / badge colour (default red)
  */
+/**
+ * "Undo last" button for the header, and the "Cancel" link for the meta
+ * row while in undo mode. Shared by all three grid screens so the
+ * affordance looks and sits identically everywhere.
+ */
+export const UndoButton = ({ onPress }) => (
+  <TouchableOpacity onPress={onPress} hitSlop={10} style={styles.undoBtn}>
+    <Text style={styles.undoBtnText}>↩ Undo last</Text>
+  </TouchableOpacity>
+);
+
+export const CancelUndoLink = ({ onPress }) => (
+  <TouchableOpacity onPress={onPress} hitSlop={10} style={styles.cancelBtn}>
+    <Text style={styles.cancelBtnText}>✕ Cancel — leave last screen as-is</Text>
+  </TouchableOpacity>
+);
+
 const ReviewGrid = ({
   visible,
   title,
+  headerAction = null,
   hint,
   meta = null,
   faces = [],
@@ -130,6 +150,7 @@ const ReviewGrid = ({
             label screen. */}
         <View style={styles.header}>
           <Text style={styles.title} numberOfLines={1}>{title}</Text>
+          {headerAction}
         </View>
         <View style={styles.metaRow}>{meta}</View>
         <Text style={styles.hint} numberOfLines={1}>{hint}</Text>
@@ -198,6 +219,10 @@ const styles = StyleSheet.create({
     paddingRight: 16,
   },
   title: { flex: 1, fontSize: 18, fontWeight: 'bold', color: '#333' },
+  undoBtn: { paddingVertical: 6, paddingLeft: 10 },
+  undoBtnText: { fontSize: 13, color: '#555', fontWeight: '600' },
+  cancelBtn: { paddingVertical: 6 },
+  cancelBtnText: { fontSize: 13, color: '#8E44AD', fontWeight: '600' },
   metaRow: {
     height: 34,
     flexDirection: 'row',

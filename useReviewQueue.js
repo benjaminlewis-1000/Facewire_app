@@ -25,8 +25,16 @@ import { PAGE_LIMIT } from './ReviewGrid';
  *   onPage(meta)     optional; runs after each fetch with that fetch's meta
  *
  * Returns { faces, excluded, toggle, loading, busy, cooldown, error, submit,
- * reload, setError }. `submit` returns true once the write landed (so
- * callers with their own running totals only advance them on success).
+ * reload, setError, canUndo, undoing, beginUndo, cancelUndo, submitUndo }.
+ * `submit` returns true once the write landed (so callers with their own
+ * running totals only advance them on success).
+ *
+ * UNDO LAST SCREEN: after a submit the just-handled screenful is stashed.
+ * `beginUndo()` re-shows it (tap the faces that shouldn't have gone
+ * through); `submitUndo()` PATCHes those ids to `undoUrl` with
+ * `buildUndoBody(ids)` to send them back to the pool for reprocessing,
+ * then returns to the forward view. One level only -- the stash clears on
+ * beginUndo's submit/cancel and refills on the next forward submit.
  */
 const SUBMIT_COOLDOWN_MS = 500;
 
@@ -38,6 +46,11 @@ export default function useReviewQueue({
   onPage,
   pageSize = PAGE_LIMIT,
   cooldownMs = SUBMIT_COOLDOWN_MS, // overridable in tests
+  // "Undo last screen" target. Defaults to the same endpoint with the
+  // tapped faces as resets; IgnoreReviewScreen overrides both because its
+  // normal endpoint (bulk_confirm_ignore) has no reset path.
+  undoUrl = submitUrl,
+  buildUndoBody = (resetIds) => buildBody([], resetIds),
 }) {
   const page = Math.max(3, pageSize || PAGE_LIMIT);
   const [faces, setFaces] = useState([]);
@@ -48,6 +61,10 @@ export default function useReviewQueue({
   // that lands the submit button doesn't also fire it on the next
   // (different) screenful.
   const [cooldown, setCooldown] = useState(false);
+  // In "undo last screen" mode: the grid shows the previously-submitted
+  // screenful so the reviewer can flag faces that shouldn't have gone
+  // through.
+  const [undoing, setUndoing] = useState(false);
   const [error, setError] = useState('');
 
   const seen = useRef(new Set());
@@ -55,6 +72,8 @@ export default function useReviewQueue({
   const inFlightRef = useRef(null);
   const submitLockRef = useRef(false);
   const cooldownTimerRef = useRef(null);
+  const prevFacesRef = useRef(null); // last submitted screenful (for undo)
+  const lastSubmitRef = useRef(null); // that submit's in-flight PATCH promise
 
   const armCooldown = useCallback(() => {
     if (cooldownMs <= 0) return;
@@ -155,14 +174,18 @@ export default function useReviewQueue({
   // dismissible banner; the already-shown faces are in `seen` so they
   // won't cycle back. Returns true once the advance has kicked off.
   const submit = useCallback(async () => {
-    if (submitLockRef.current || loading || cooldown || faces.length === 0) return false;
+    if (submitLockRef.current || loading || cooldown || undoing || faces.length === 0)
+      return false;
     submitLockRef.current = true;
     try {
       const keep = faces.filter((f) => !excluded.has(f.id)).map((f) => f.id);
       const flag = faces.filter((f) => excluded.has(f.id)).map((f) => f.id);
       const consumed = faces.length;
 
-      authedFetch(submitUrl, {
+      // Stash this screenful so "undo last screen" can re-show it.
+      prevFacesRef.current = faces;
+
+      lastSubmitRef.current = authedFetch(submitUrl, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(buildBody(keep, flag)),
@@ -190,7 +213,71 @@ export default function useReviewQueue({
     } finally {
       submitLockRef.current = false;
     }
-  }, [loading, cooldown, faces, excluded, buildBody, submitUrl, fill, showWindow, page]);
+  }, [loading, cooldown, undoing, faces, excluded, buildBody, submitUrl, fill, showWindow, page]);
+
+  // ---- Undo last screen -------------------------------------------------
+  // Only meaningful once a forward submit has stashed a screenful, and not
+  // already in undo mode / mid-load.
+  const canUndo = !undoing && !loading && prevFacesRef.current != null;
+
+  // Swap the grid to the previously-submitted screenful; taps here mean
+  // "this shouldn't have gone through -> send it back for reprocessing".
+  const beginUndo = useCallback(() => {
+    if (!prevFacesRef.current || undoing) return;
+    setFaces(prevFacesRef.current);
+    setExcluded(new Set());
+    setUndoing(true);
+    armCooldown();
+  }, [undoing, armCooldown]);
+
+  // Leave undo mode without touching anything; re-window the forward view.
+  const cancelUndo = useCallback(() => {
+    if (!undoing) return;
+    setUndoing(false);
+    prevFacesRef.current = null;
+    showWindow();
+  }, [undoing, showWindow]);
+
+  // PATCH the flagged faces back to the pool, then return to the forward
+  // view. Returns how many were sent back (0 => behaved like cancel).
+  const submitUndo = useCallback(async () => {
+    if (!undoing || submitLockRef.current) return 0;
+    submitLockRef.current = true;
+    try {
+      const ids = (prevFacesRef.current || [])
+        .filter((f) => excluded.has(f.id))
+        .map((f) => f.id);
+
+      if (ids.length) {
+        // Let the forward PATCH for this batch land first, so the reset
+        // isn't racing a still-pending verify on the same faces.
+        try {
+          await lastSubmitRef.current;
+        } catch (e) {
+          /* forward submit already surfaced its own error */
+        }
+        authedFetch(undoUrl, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(buildUndoBody(ids)),
+        })
+          .then((resp) => {
+            if (!resp.ok) setError("Couldn't send those back — they may need redoing.");
+          })
+          .catch((e) => {
+            console.warn('undo submit failed:', e);
+            setError("Couldn't send those back — they may need redoing.");
+          });
+      }
+
+      setUndoing(false);
+      prevFacesRef.current = null;
+      showWindow();
+      return ids.length;
+    } finally {
+      submitLockRef.current = false;
+    }
+  }, [undoing, excluded, undoUrl, buildUndoBody, showWindow]);
 
   return {
     faces,
@@ -203,5 +290,10 @@ export default function useReviewQueue({
     submit,
     reload: load,
     setError,
+    canUndo,
+    undoing,
+    beginUndo,
+    cancelUndo,
+    submitUndo,
   };
 }
