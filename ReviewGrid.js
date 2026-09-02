@@ -8,6 +8,7 @@ import {
   FlatList,
   ActivityIndicator,
   Dimensions,
+  useWindowDimensions,
 } from 'react-native';
 
 const { width, height } = Dimensions.get('window');
@@ -108,6 +109,12 @@ const ReviewGrid = ({
   onCapacity,
   accent = '#C0392B',
 }) => {
+  // RN 0.81+ Android is edge-to-edge and an `absoluteFillObject` root no
+  // longer reliably stretches to its containing block, so pin the overlay
+  // to the real window size. (Portrait-locked, but the hook keeps it
+  // correct through any metrics change.)
+  const { width: winW, height: winH } = useWindowDimensions();
+
   // Measure the real height available for the grid, then pick a row count
   // (rounded -- a row that almost fits still shows) and shrink the chips
   // just enough that that many rows fit with no scroll.
@@ -144,7 +151,7 @@ const ReviewGrid = ({
   if (!visible) return null;
 
   return (
-      <View style={styles.container}>
+      <View style={[styles.container, { width: winW, height: winH }]}>
         {/* Fixed header stack -- identical geometry on every grid screen.
             No close button: navigate via the hamburger menu, same as the
             label screen. */}
@@ -206,7 +213,11 @@ const ReviewGrid = ({
 
 const styles = StyleSheet.create({
   container: {
-    ...StyleSheet.absoluteFillObject,
+    // width/height are supplied inline from useWindowDimensions; keeping
+    // only top/left here avoids a bottom-vs-height conflict in Yoga.
+    position: 'absolute',
+    top: 0,
+    left: 0,
     backgroundColor: '#f0f0f0',
     paddingTop: 56,
   },

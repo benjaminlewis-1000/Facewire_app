@@ -1,5 +1,12 @@
 import React from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import {
+  StyleSheet,
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  useWindowDimensions,
+} from 'react-native';
 
 const PREFETCH_DEFAULT = 10;
 const PREFETCH_MAX = 60;
@@ -21,10 +28,14 @@ const SettingsScreen = ({
   const setValue = (n) => onChangePrefetchCount(Math.max(0, Math.min(PREFETCH_MAX, n)));
   const setPages = (n) => onChangeIgnorePages(Math.max(0, Math.min(IGNORE_PAGES_MAX, n)));
 
+  // See ReviewGrid: an absoluteFillObject root no longer stretches under
+  // RN 0.81+ edge-to-edge; pin to the real window size instead.
+  const { width: winW, height: winH } = useWindowDimensions();
+
   if (!visible) return null;
 
   return (
-      <View style={styles.container}>
+      <View style={[styles.container, { width: winW, height: winH }]}>
         <View style={styles.header}>
           <Text style={styles.title}>Settings</Text>
           <TouchableOpacity onPress={onClose} style={styles.closeButton} hitSlop={12}>
@@ -117,7 +128,10 @@ const SettingsScreen = ({
 
 const styles = StyleSheet.create({
   container: {
-    ...StyleSheet.absoluteFillObject,
+    // width/height supplied inline from useWindowDimensions.
+    position: 'absolute',
+    top: 0,
+    left: 0,
     backgroundColor: '#f0f0f0',
     paddingTop: 44,
   },
