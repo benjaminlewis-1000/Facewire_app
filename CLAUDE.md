@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run android` / `npm run ios` — start with a specific platform target
 - `npm run web` — run in the browser
 
-There is no test suite, linter, or typecheck configured. The project is plain JavaScript (no TypeScript) on Expo SDK 53 / React Native 0.79 / React 19, with the New Architecture enabled (`newArchEnabled: true` in `app.json`).
+`npm test` (Jest via `jest-expo`) runs the unit suite in `__tests__/` — `auth.test.js`, `useReviewQueue.test.js`, `queueLogic.test.js`. No linter or typecheck is configured. The project is plain JavaScript (no TypeScript) on Expo SDK 57 / React Native 0.86 / React 19. The New Architecture is the default in SDK 57 (no `newArchEnabled` flag needed); reanimated 4 pulls in `react-native-worklets`. Requires Node 20+ (Node 22 recommended).
 
 ## Architecture
 
