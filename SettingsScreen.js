@@ -7,6 +7,7 @@ import {
   ScrollView,
   useWindowDimensions,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const PREFETCH_DEFAULT = 10;
 const PREFETCH_MAX = 60;
@@ -29,13 +30,20 @@ const SettingsScreen = ({
   const setPages = (n) => onChangeIgnorePages(Math.max(0, Math.min(IGNORE_PAGES_MAX, n)));
 
   // See ReviewGrid: an absoluteFillObject root no longer stretches under
-  // RN 0.81+ edge-to-edge; pin to the real window size instead.
+  // RN 0.81+ edge-to-edge; pin to the real window size instead, and pad
+  // the top by the real status-bar inset (no longer applied for us).
   const { width: winW, height: winH } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
 
   if (!visible) return null;
 
   return (
-      <View style={[styles.container, { width: winW, height: winH }]}>
+      <View
+        style={[
+          styles.container,
+          { width: winW, height: winH, paddingTop: insets.top + 28 },
+        ]}
+      >
         <View style={styles.header}>
           <Text style={styles.title}>Settings</Text>
           <TouchableOpacity onPress={onClose} style={styles.closeButton} hitSlop={12}>
@@ -128,19 +136,18 @@ const SettingsScreen = ({
 
 const styles = StyleSheet.create({
   container: {
-    // width/height supplied inline from useWindowDimensions.
+    // width/height + paddingTop supplied inline (window size + safe-area).
     position: 'absolute',
     top: 0,
     left: 0,
     backgroundColor: '#f0f0f0',
-    paddingTop: 44,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingLeft: 44,
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingLeft: 62, // clear the global hamburger button (top-left)
+    paddingRight: 16,
     paddingBottom: 10,
   },
   title: { fontSize: 20, fontWeight: 'bold', color: '#333' },

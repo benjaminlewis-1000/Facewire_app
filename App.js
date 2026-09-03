@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, View, Image, Text, TouchableOpacity, ScrollView, Dimensions, ActivityIndicator, Modal, AppState } from 'react-native';
+import { StyleSheet, View, Image, Text, TouchableOpacity, Pressable, ScrollView, Dimensions, ActivityIndicator, Modal, AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage'; // Import AsyncStorage
 import { ImageZoom } from '@likashefqet/react-native-image-zoom';
 import LoginScreen from './LoginScreen'; // Import the new LoginScreen component
@@ -18,6 +18,7 @@ const SCREEN_TOAST = {
 import { authedFetch, signOut, lockSession, getValidIdToken, API_BASE } from './auth';
 import { firstCheckIndex, pruneAndLocate, frontierAfterRemoval } from './queueLogic';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Get screen dimensions for responsive styling
 const { width, height } = Dimensions.get('window');
@@ -29,6 +30,11 @@ const placeholderImages = [
 
 // Main App component
 export default function App() {
+  // SDK 54+ forces Android edge-to-edge; the status bar no longer insets
+  // us, so the label screen's top chrome (hamburger, face-nav, container)
+  // adds the real inset itself.
+  const insets = useSafeAreaInsets();
+
   // Authentication states
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
@@ -821,11 +827,11 @@ export default function App() {
         return false; // passive: let children handle the touch
       }}
     >
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top + 52 }]}>
       {screen === 'label' && (
        <>
       {/* Face nav (within the current person's list) */}
-      <View style={styles.navigationButtonsContainer}>
+      <View style={[styles.navigationButtonsContainer, { top: insets.top + 8 }]}>
         <TouchableOpacity
           style={[styles.navButton, !canNavFaceBack && styles.navButtonDisabled]}
           onPress={handleNavigateBackward}
@@ -1163,48 +1169,27 @@ export default function App() {
         visible={showSourceImageModal}
         onRequestClose={() => setShowSourceImageModal(false)}
       >
-        <GestureHandlerRootView>
-{/*         
-      <View style={styles.imageContainer}>
-        {isLoadingContent ? (
-          <ActivityIndicator size="large" color="#0000ff" />
-        ) : (
-          <TouchableOpacity
-            onPress={() => {
-              console.log('Tapped image. currentSourceImage:', currentSourceImage); // Debugging log
-              if (currentSourceImage) {
-                setShowSourceImageModal(true);
-              } else {
-                console.log("No source image URL available to display.");
-              }
-            }}
-            style={styles.imageTouchable} // Ensure touchable area covers image
-          >
-            <ImageZoom
-              url={ currentImage } // Set the image source from state
-              style={styles.image}
-              resizeMode="contain" // Ensures the entire image is visible within its container
-              // Optional: Add an onError handler for debugging image loading issues
-              onError={(e) => console.log('Image loading error:', e.nativeEvent.error)}
-            />
-          </TouchableOpacity>
-        )}
-      </View> */}
-      
-        <View style={styles.fullScreenImageOverlay}>
-          
+        <GestureHandlerRootView style={{ flex: 1 }}>
+        {/* Tap anywhere -- the letterbox margins (Pressable) or the image
+            itself (ImageZoom's single-tap) -- to dismiss. Pinch / pan /
+            double-tap-zoom still work; movement cancels the dismiss tap. */}
+        <Pressable
+          style={styles.fullScreenImageOverlay}
+          onPress={() => setShowSourceImageModal(false)}
+        >
           {currentSourceImage ? (
             <>
             <View style={styles.imageTouchable}>
              <ImageZoom
                 uri={ currentSourceImage }
                 style={styles.fullScreenImage}
-                // resizeMode="contain" // Ensures the whole image is visible
                 onError={(e) => console.log('Source image loading error:', e.nativeEvent.error)}
                 isDoubleTapEnabled={true}
+                isSingleTapEnabled={true}
+                onSingleTap={() => setShowSourceImageModal(false)}
                 maxScale={20}
                 /></View>
-                
+
               {/* Dedicated close button for the full-screen image modal */}
               <TouchableOpacity
                 style={styles.fullScreenImageCloseButton}
@@ -1216,7 +1201,7 @@ export default function App() {
           ) : (
             <Text style={styles.noSourceImageText}>No source image available.</Text>
           )}
-        </View>
+        </Pressable>
         </GestureHandlerRootView>
       </Modal>
 
@@ -1292,7 +1277,7 @@ export default function App() {
 
     {/* Hamburger button -- rendered last so it stays above every screen */}
     <TouchableOpacity
-      style={styles.hamburgerIcon}
+      style={[styles.hamburgerIcon, { top: insets.top + 8 }]}
       onPress={() => setIsMenuVisible(true)}
     >
       <Text style={styles.hamburgerText}>☰</Text>
@@ -1309,7 +1294,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f0f0', // Light grey background
     alignItems: 'center', // Center content horizontally
     justifyContent: 'flex-start', // Align content to the top
-    paddingTop: 80, // Increased padding from the top to make space for hamburger menu
+    // paddingTop supplied inline: insets.top + room for the hamburger.
   },
   loadingContainer: {
     flex: 1,

@@ -10,6 +10,7 @@ import {
   Dimensions,
   useWindowDimensions,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width, height } = Dimensions.get('window');
 export const COLS = 3;
@@ -114,6 +115,7 @@ const ReviewGrid = ({
   // to the real window size. (Portrait-locked, but the hook keeps it
   // correct through any metrics change.)
   const { width: winW, height: winH } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
 
   // Measure the real height available for the grid, then pick a row count
   // (rounded -- a row that almost fits still shows) and shrink the chips
@@ -151,7 +153,12 @@ const ReviewGrid = ({
   if (!visible) return null;
 
   return (
-      <View style={[styles.container, { width: winW, height: winH }]}>
+      <View
+        style={[
+          styles.container,
+          { width: winW, height: winH, paddingTop: insets.top + 28 },
+        ]}
+      >
         {/* Fixed header stack -- identical geometry on every grid screen.
             No close button: navigate via the hamburger menu, same as the
             label screen. */}
@@ -192,7 +199,7 @@ const ReviewGrid = ({
         {error && faces.length ? (
           <Text style={styles.errorText}>{error}</Text>
         ) : null}
-        <View style={styles.footer}>
+        <View style={[styles.footer, { paddingBottom: insets.bottom + 24 }]}>
           <TouchableOpacity
             style={[
               styles.submitButton,
@@ -213,13 +220,13 @@ const ReviewGrid = ({
 
 const styles = StyleSheet.create({
   container: {
-    // width/height are supplied inline from useWindowDimensions; keeping
-    // only top/left here avoids a bottom-vs-height conflict in Yoga.
+    // width/height + paddingTop are supplied inline (window size +
+    // safe-area top inset); keeping only top/left here avoids a
+    // bottom-vs-height conflict in Yoga.
     position: 'absolute',
     top: 0,
     left: 0,
     backgroundColor: '#f0f0f0',
-    paddingTop: 56,
   },
   header: {
     height: 40,
@@ -278,7 +285,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 4,
   },
-  footer: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 60 },
+  footer: { paddingHorizontal: 16, paddingTop: 8 }, // paddingBottom inline (safe-area)
   submitButton: {
     paddingVertical: 15,
     borderRadius: 12,
