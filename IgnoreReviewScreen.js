@@ -9,6 +9,10 @@ import useReviewQueue from './useReviewQueue';
  * Untapped chips are confirmed as `.ignore`; tapped chips are hidden from
  * this grid (mobile_review_hidden) without otherwise touching the face.
  * useReviewQueue buffers the batch so the next screenful is instant.
+ *
+ * "Undo last screen": tapped faces are un-confirmed -- back to unlabeled
+ * with `.ignore` as the top guess again, and hidden from the grid
+ * (bulk_confirm_ignore `undo_ids`). Untapped faces stay confirmed.
  */
 const IgnoreReviewScreen = ({ visible, onClose }) => {
   const [pageSize, setPageSize] = useState(PAGE_LIMIT);
@@ -30,10 +34,13 @@ const IgnoreReviewScreen = ({ visible, onClose }) => {
     pageSize,
     submitUrl: `${API_BASE}/mobile/bulk_confirm_ignore/`,
     buildBody: (confirm_ids, hide_ids) => ({ confirm_ids, hide_ids }),
-    // bulk_confirm_ignore has no reset path -- route "undo" through
-    // bulk_verify, whose reset_ids loop sends any face back to the pool.
-    undoUrl: `${API_BASE}/mobile/bulk_verify/`,
-    buildUndoBody: (reset_ids) => ({ verify_ids: [], reset_ids }),
+    // "Undo last screen" here is unlike the verify grids: the tapped
+    // faces shouldn't be reprocessed -- they go back to unlabeled with
+    // .ignore restored as the top guess AND hidden from this grid. The
+    // untapped ones stay confirmed as .ignore (already done on submit),
+    // so only the tapped ids are sent.
+    undoUrl: `${API_BASE}/mobile/bulk_confirm_ignore/`,
+    buildUndoBody: (undo_ids) => ({ undo_ids }),
   });
 
   const backCount = q.faces.filter((f) => q.excluded.has(f.id)).length;
@@ -41,7 +48,7 @@ const IgnoreReviewScreen = ({ visible, onClose }) => {
   const confirmCount = q.faces.length - hideCount;
   const submitLabel = q.undoing
     ? backCount
-      ? `Reprocess ${backCount}`
+      ? `Hide ${backCount}`
       : 'Done'
     : confirmCount > 0
     ? `Ignore ${confirmCount}` + (hideCount ? `  ·  hide ${hideCount}` : '')
@@ -56,7 +63,7 @@ const IgnoreReviewScreen = ({ visible, onClose }) => {
       meta={q.undoing ? <CancelUndoLink onPress={q.cancelUndo} /> : null}
       hint={
         q.undoing
-          ? 'Tap the faces that should be reprocessed instead of ignored.'
+          ? "Tap any that shouldn't have been confirmed — they'll be hidden instead."
           : "Tap any you don't want to decide on — it won't show here again."
       }
       faces={q.faces}
