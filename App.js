@@ -981,7 +981,7 @@ export default function App() {
           </ScrollView>
 
           {/* Skip bar */}
-          <View style={styles.skipBar}>
+          <View style={[styles.skipBar, { paddingBottom: insets.bottom + 16 }]}>
             <TouchableOpacity
               style={[styles.skipButtonFull, isLoadingContent && styles.choiceDisabled]}
               onPress={skipFace}
@@ -993,7 +993,7 @@ export default function App() {
         </>
       ) : (
         // Viewing a past item -> only offer "Reset Face"
-        <View style={styles.skipBar}>
+        <View style={[styles.skipBar, { paddingBottom: insets.bottom + 16 }]}>
           <TouchableOpacity
             style={[styles.resetFaceButton, isLoadingContent && styles.choiceDisabled]}
             onPress={handleResetFaceClick}
@@ -1499,7 +1499,7 @@ const styles = StyleSheet.create({
   },
   choiceButton: {
     width: width * 0.86,
-    paddingVertical: 16,
+    paddingVertical: 13,
     borderRadius: 12,
     marginVertical: 5,
     alignItems: 'center',
@@ -1531,19 +1531,19 @@ const styles = StyleSheet.create({
     width: '100%',
     paddingHorizontal: '5%',
     paddingTop: 8,
-    paddingBottom: 40,
+    // paddingBottom supplied inline: insets.bottom + clearance.
   },
   skipButtonFull: {
     width: '100%',
     backgroundColor: '#8A8A8A',
-    paddingVertical: 15,
+    paddingVertical: 13,
     borderRadius: 12,
     alignItems: 'center',
   },
   resetFaceButton: {
     width: '100%',
     backgroundColor: '#E69A0E',
-    paddingVertical: 15,
+    paddingVertical: 13,
     borderRadius: 12,
     alignItems: 'center',
   },
@@ -1722,13 +1722,13 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     width: '100%', // Full width
-    height: height * 0.45, // Takes approximately 45% of screen height for the image
+    height: height * 0.42, // Takes approximately 42% of screen height for the image
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#ffffff', // White background for the image area
     borderRadius: 10,
     overflow: 'hidden', // Ensures image respects border radius
-    marginBottom: 20, // Space below the image container
+    marginBottom: 12, // Space below the image container
     // Shadow for a subtle depth effect
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
