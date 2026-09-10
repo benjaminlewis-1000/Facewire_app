@@ -827,7 +827,18 @@ export default function App() {
         return false; // passive: let children handle the touch
       }}
     >
-    <View style={[styles.container, { paddingTop: insets.top + 52 }]}>
+    {/* Label container: only takes layout space on the label screen. The
+        grid / settings screens render as flex:1 siblings and fill the
+        window themselves, so this must collapse out of the way (its
+        modals still portal to the root regardless of its size). */}
+    <View
+      style={[
+        styles.container,
+        screen === 'label'
+          ? { flex: 1, paddingTop: insets.top + 52 }
+          : styles.containerCollapsed,
+      ]}
+    >
       {screen === 'label' && (
        <>
       {/* Face nav (within the current person's list) */}
@@ -1290,12 +1301,14 @@ export default function App() {
 // StyleSheet for the components
 const styles = StyleSheet.create({
   container: {
-    flex: 1, // Takes up the entire screen
     backgroundColor: '#f0f0f0', // Light grey background
     alignItems: 'center', // Center content horizontally
     justifyContent: 'flex-start', // Align content to the top
-    // paddingTop supplied inline: insets.top + room for the hamburger.
+    // flex/height + paddingTop supplied inline (depends on active screen).
   },
+  // Off the label screen: occupy no layout space so the flex:1 grid /
+  // settings sibling fills the window. Modal children still portal out.
+  containerCollapsed: { height: 0, overflow: 'hidden' },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',

@@ -8,7 +8,6 @@ import {
   FlatList,
   ActivityIndicator,
   Dimensions,
-  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -110,11 +109,6 @@ const ReviewGrid = ({
   onCapacity,
   accent = '#C0392B',
 }) => {
-  // RN 0.81+ Android is edge-to-edge and an `absoluteFillObject` root no
-  // longer reliably stretches to its containing block, so pin the overlay
-  // to the real window size. (Portrait-locked, but the hook keeps it
-  // correct through any metrics change.)
-  const { width: winW, height: winH } = useWindowDimensions();
   const insets = useSafeAreaInsets();
 
   // Measure the real height available for the grid, then pick a row count
@@ -154,10 +148,7 @@ const ReviewGrid = ({
 
   return (
       <View
-        style={[
-          styles.container,
-          { width: winW, height: winH, paddingTop: insets.top + 28 },
-        ]}
+        style={[styles.container, { paddingTop: insets.top + 28 }]}
       >
         {/* Fixed header stack -- identical geometry on every grid screen.
             No close button: navigate via the hamburger menu, same as the
@@ -199,7 +190,7 @@ const ReviewGrid = ({
         {error && faces.length ? (
           <Text style={styles.errorText}>{error}</Text>
         ) : null}
-        <View style={[styles.footer, { paddingBottom: insets.bottom + 8 }]}>
+        <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
           <TouchableOpacity
             style={[
               styles.submitButton,
@@ -220,12 +211,10 @@ const ReviewGrid = ({
 
 const styles = StyleSheet.create({
   container: {
-    // width/height + paddingTop are supplied inline (window size +
-    // safe-area top inset); keeping only top/left here avoids a
-    // bottom-vs-height conflict in Yoga.
-    position: 'absolute',
-    top: 0,
-    left: 0,
+    // Fills the window as a flex child (same as the label screen), so the
+    // footer pins to the true bottom. paddingTop is supplied inline
+    // (safe-area top inset + hamburger clearance).
+    flex: 1,
     backgroundColor: '#f0f0f0',
   },
   header: {
@@ -287,7 +276,7 @@ const styles = StyleSheet.create({
   },
   footer: { paddingHorizontal: 16, paddingTop: 8 }, // paddingBottom inline (safe-area)
   submitButton: {
-    paddingVertical: 15,
+    paddingVertical: 13,
     borderRadius: 12,
     alignItems: 'center',
   },

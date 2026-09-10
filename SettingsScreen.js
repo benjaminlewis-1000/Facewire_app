@@ -5,7 +5,6 @@ import {
   Text,
   TouchableOpacity,
   ScrollView,
-  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -29,20 +28,15 @@ const SettingsScreen = ({
   const setValue = (n) => onChangePrefetchCount(Math.max(0, Math.min(PREFETCH_MAX, n)));
   const setPages = (n) => onChangeIgnorePages(Math.max(0, Math.min(IGNORE_PAGES_MAX, n)));
 
-  // See ReviewGrid: an absoluteFillObject root no longer stretches under
-  // RN 0.81+ edge-to-edge; pin to the real window size instead, and pad
+  // Fills the window as a flex:1 sibling (see ReviewGrid / App.js); pad
   // the top by the real status-bar inset (no longer applied for us).
-  const { width: winW, height: winH } = useWindowDimensions();
   const insets = useSafeAreaInsets();
 
   if (!visible) return null;
 
   return (
       <View
-        style={[
-          styles.container,
-          { width: winW, height: winH, paddingTop: insets.top + 28 },
-        ]}
+        style={[styles.container, { paddingTop: insets.top + 28 }]}
       >
         <View style={styles.header}>
           <Text style={styles.title}>Settings</Text>
@@ -136,10 +130,8 @@ const SettingsScreen = ({
 
 const styles = StyleSheet.create({
   container: {
-    // width/height + paddingTop supplied inline (window size + safe-area).
-    position: 'absolute',
-    top: 0,
-    left: 0,
+    // paddingTop supplied inline (safe-area top inset).
+    flex: 1,
     backgroundColor: '#f0f0f0',
   },
   header: {
