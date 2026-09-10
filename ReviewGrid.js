@@ -199,7 +199,7 @@ const ReviewGrid = ({
         {error && faces.length ? (
           <Text style={styles.errorText}>{error}</Text>
         ) : null}
-        <View style={[styles.footer, { paddingBottom: insets.bottom + 24 }]}>
+        <View style={[styles.footer, { paddingBottom: insets.bottom + 8 }]}>
           <TouchableOpacity
             style={[
               styles.submitButton,
