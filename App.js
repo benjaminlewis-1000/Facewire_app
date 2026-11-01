@@ -50,6 +50,13 @@ export default function App() {
   const [idToken, setIdToken] = useState(null);
   const imageHeaders = idToken ? { Authorization: `Bearer ${idToken}` } : undefined;
 
+  // Image URLs for the next `prefetchCount` upcoming faces, warmed into
+  // the native image cache by mounting them off-screen (see the hidden
+  // <Image> pool near the end of the render and `warmPrefetchCache`).
+  // Unlike Image.prefetch, a real <Image> element can carry auth
+  // headers, which these URLs now require.
+  const [prefetchUrls, setPrefetchUrls] = useState([]);
+
   // UI states
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [isLoadingContent, setIsLoadingContent] = useState(true);
@@ -241,24 +248,44 @@ export default function App() {
     return data;
   };
 
+  // Recompute `prefetchUrls` (the hidden <Image> pool, see its render
+  // site) from whatever's currently cached for this window of ids.
+  // Called once up front with what's already in instanceCache, and
+  // again after each fresh fetch resolves -- idempotent, just reflects
+  // the current state of the cache for this window.
+  const syncPrefetchPool = (windowIds) => {
+    const urls = [];
+    for (const id of windowIds) {
+      const data = instanceCache.current.get(id);
+      if (data?.face_img_url) urls.push(data.face_img_url);
+      if (data?.source_img_url) urls.push(data.source_img_url);
+    }
+    setPrefetchUrls(urls);
+  };
+
   /**
-   * Background-fetch instance data for the next `prefetchCount` faces
-   * after `fromIndex`, in parallel, skipping any already cached, in
-   * flight, or known to be resolved elsewhere. Doesn't warm the image
-   * cache -- `Image.prefetch` can't attach the auth header these URLs
-   * now require (see `imageHeaders`), so the actual <Image> tags are
-   * the only thing fetching them.
+   * Background-fetch instance data AND warm the image cache for the next
+   * `prefetchCount` faces after `fromIndex`, in parallel, skipping any
+   * already cached, in flight, or known to be resolved elsewhere. Image
+   * warming mounts the URLs off-screen (`prefetchUrls` / the hidden pool)
+   * rather than using `Image.prefetch`, which can't carry the auth header
+   * these URLs now require (see `imageHeaders`).
    */
   const warmPrefetchCache = (ids, fromIndex) => {
     let queued = 0;
+    const windowIds = [];
     for (let i = fromIndex + 1; i < ids.length && queued < prefetchCount; i++) {
       const id = ids[i];
       if (resolvedIds.current.has(id)) continue; // don't cache already-verified
       queued += 1;
+      windowIds.push(id);
       if (instanceCache.current.has(id)) continue;
       // fetchUnlabeledInstanceData dedupes in-flight requests internally.
-      fetchUnlabeledInstanceData(id, { display: false, allowCache: false }).catch(() => {});
+      fetchUnlabeledInstanceData(id, { display: false, allowCache: false })
+        .then(() => syncPrefetchPool(windowIds))
+        .catch(() => {});
     }
+    syncPrefetchPool(windowIds);
   };
 
   // LoginScreen owns startup auth (biometric gate + silent token
@@ -1298,6 +1325,17 @@ export default function App() {
       />
     )}
 
+    {/* Hidden prefetch pool: mounts the next `prefetchCount` faces' image
+        URLs off-screen so they're already in the native image cache by
+        the time the reviewer reaches them. A real <Image> element (not
+        Image.prefetch) so it can carry the auth header these URLs now
+        require. */}
+    <View style={styles.offscreenPrefetchPool} pointerEvents="none">
+      {prefetchUrls.map((uri) => (
+        <Image key={uri} source={{ uri, headers: imageHeaders }} style={styles.offscreenPrefetchImg} />
+      ))}
+    </View>
+
     {/* Screen-entry cue for screens without a per-person one */}
     <ScreenToast trigger={screen} title={SCREEN_TOAST[screen]} />
 
@@ -1324,6 +1362,8 @@ const styles = StyleSheet.create({
   // Off the label screen: occupy no layout space so the flex:1 grid /
   // settings sibling fills the window. Modal children still portal out.
   containerCollapsed: { height: 0, overflow: 'hidden' },
+  offscreenPrefetchPool: { position: 'absolute', top: -1000, left: -1000, width: 1, height: 1, overflow: 'hidden' },
+  offscreenPrefetchImg: { width: 1, height: 1 },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
