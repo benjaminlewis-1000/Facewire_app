@@ -202,6 +202,12 @@ const ReviewGrid = ({
               keyExtractor={(item) => String(item.id)}
               numColumns={COLS}
               scrollEnabled={false}
+              // scrollEnabled doesn't turn off virtualization -- FlatList
+              // still only renders `initialNumToRender` (default 10)
+              // items up front, and with scrolling disabled there's no
+              // way to trigger the rest. Since this grid never scrolls,
+              // just render the whole (already-capped-by-layoutFor) list.
+              initialNumToRender={faces.length}
               contentContainerStyle={styles.grid}
               columnWrapperStyle={styles.gridRow}
             />
