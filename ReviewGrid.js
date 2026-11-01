@@ -145,8 +145,11 @@ const ReviewGrid = ({
           // Wait on idToken before mounting: an <Image> that fires before
           // the auth header is ready gets 429'd and never retries -- RN
           // only reloads on a `source.uri` change, not a headers-only one.
+          // Array form, not a bare {uri, headers} object: RN Android's
+          // Image.android.js only wires source.headers into native props
+          // on the array branch -- a plain object source drops them.
           <Image
-            source={{ uri: item.face_img_url, headers: imageHeaders }}
+            source={[{ uri: item.face_img_url, headers: imageHeaders }]}
             style={[styles.chipImage, isExcluded && styles.chipImageExcluded]}
             resizeMode="cover"
           />

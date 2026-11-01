@@ -947,7 +947,11 @@ export default function App() {
             style={styles.imageTouchable} // Ensure touchable area covers image
           >
             <Image
-              source={{ uri: currentImage, headers: imageHeaders }} // Set the image source from state
+              // Array form, not a bare {uri, headers} object: RN Android's
+              // Image.android.js only wires source.headers into the
+              // native props on the array branch -- a plain object
+              // source silently drops headers entirely.
+              source={[{ uri: currentImage, headers: imageHeaders }]}
               style={styles.image}
               resizeMode="contain" // Ensures the entire image is visible within its container
               // Optional: Add an onError handler for debugging image loading issues
@@ -1238,7 +1242,7 @@ export default function App() {
             <>
             <View style={styles.imageTouchable}>
              <ImageZoom
-                source={{ uri: currentSourceImage, headers: imageHeaders }}
+                source={[{ uri: currentSourceImage, headers: imageHeaders }]}
                 style={styles.fullScreenImage}
                 onError={(e) => console.log('Source image loading error:', e.nativeEvent.error)}
                 isDoubleTapEnabled={true}
@@ -1336,7 +1340,7 @@ export default function App() {
         require. */}
     <View style={styles.offscreenPrefetchPool} pointerEvents="none">
       {idToken && prefetchUrls.map((uri) => (
-        <Image key={uri} source={{ uri, headers: imageHeaders }} style={styles.offscreenPrefetchImg} />
+        <Image key={uri} source={[{ uri, headers: imageHeaders }]} style={styles.offscreenPrefetchImg} />
       ))}
     </View>
 
