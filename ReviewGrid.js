@@ -152,6 +152,8 @@ const ReviewGrid = ({
             source={[{ uri: item.face_img_url, headers: imageHeaders }]}
             style={[styles.chipImage, isExcluded && styles.chipImageExcluded]}
             resizeMode="cover"
+            onError={(e) => console.log('Chip image error:', item.face_img_url, e.nativeEvent.error)}
+            onLoad={() => console.log('Chip image OK:', item.face_img_url)}
           />
         )}
         {isExcluded && (

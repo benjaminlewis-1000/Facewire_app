@@ -955,7 +955,8 @@ export default function App() {
               style={styles.image}
               resizeMode="contain" // Ensures the entire image is visible within its container
               // Optional: Add an onError handler for debugging image loading issues
-              onError={(e) => console.log('Image loading error:', e.nativeEvent.error)}
+              onError={(e) => console.log('Image loading error:', currentImage, e.nativeEvent.error)}
+              onLoad={() => console.log('Image loaded OK:', currentImage)}
             />
           </TouchableOpacity>
         )}
