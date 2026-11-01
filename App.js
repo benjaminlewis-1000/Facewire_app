@@ -165,7 +165,7 @@ export default function App() {
     setCurrentSourceImage(data.source_img_url || null);
     // Keep the bearer token current for the <Image> tags' auth headers
     // (cheap -- only refreshes over the network if actually near expiry).
-    getValidIdToken().then(setIdToken).catch(() => {});
+    getValidIdToken().then(setIdToken).catch((e) => console.warn('image auth token fetch failed:', e?.message));
   };
 
   /**
@@ -294,7 +294,7 @@ export default function App() {
   // Prime the image-auth header as soon as we're logged in, so the very
   // first face image doesn't go out unauthenticated.
   useEffect(() => {
-    if (isLoggedIn) getValidIdToken().then(setIdToken).catch(() => {});
+    if (isLoggedIn) getValidIdToken().then(setIdToken).catch((e) => console.warn('image auth token fetch failed:', e?.message));
   }, [isLoggedIn]);
 
   useEffect(() => {
@@ -928,7 +928,11 @@ export default function App() {
 
       {/* Image Section: Displays loading or image */}
       <View style={styles.imageContainer}>
-        {isLoadingContent ? (
+        {isLoadingContent || !idToken ? (
+          // Also wait on idToken: an <Image> that mounts before the auth
+          // header is ready gets 429'd by the backend and never retries
+          // -- RN's Image only reloads when `source.uri` changes, not
+          // when only `source.headers` does.
           <ActivityIndicator size="large" color="#0000ff" />
         ) : (
           <TouchableOpacity
@@ -1230,7 +1234,7 @@ export default function App() {
           style={styles.fullScreenImageOverlay}
           onPress={() => setShowSourceImageModal(false)}
         >
-          {currentSourceImage ? (
+          {currentSourceImage && idToken ? (
             <>
             <View style={styles.imageTouchable}>
              <ImageZoom
@@ -1331,7 +1335,7 @@ export default function App() {
         Image.prefetch) so it can carry the auth header these URLs now
         require. */}
     <View style={styles.offscreenPrefetchPool} pointerEvents="none">
-      {prefetchUrls.map((uri) => (
+      {idToken && prefetchUrls.map((uri) => (
         <Image key={uri} source={{ uri, headers: imageHeaders }} style={styles.offscreenPrefetchImg} />
       ))}
     </View>

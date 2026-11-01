@@ -118,7 +118,7 @@ const ReviewGrid = ({
   // screenful of faces arrives (cheap unless actually near expiry).
   const [idToken, setIdToken] = useState(null);
   useEffect(() => {
-    if (visible) getValidIdToken().then(setIdToken).catch(() => {});
+    if (visible) getValidIdToken().then(setIdToken).catch((e) => console.warn('image auth token fetch failed:', e?.message));
   }, [visible, faces]);
   const imageHeaders = idToken ? { Authorization: `Bearer ${idToken}` } : undefined;
 
@@ -141,11 +141,16 @@ const ReviewGrid = ({
         activeOpacity={0.8}
         onPress={() => onToggle(item.id)}
       >
-        <Image
-          source={{ uri: item.face_img_url, headers: imageHeaders }}
-          style={[styles.chipImage, isExcluded && styles.chipImageExcluded]}
-          resizeMode="cover"
-        />
+        {idToken && (
+          // Wait on idToken before mounting: an <Image> that fires before
+          // the auth header is ready gets 429'd and never retries -- RN
+          // only reloads on a `source.uri` change, not a headers-only one.
+          <Image
+            source={{ uri: item.face_img_url, headers: imageHeaders }}
+            style={[styles.chipImage, isExcluded && styles.chipImageExcluded]}
+            resizeMode="cover"
+          />
+        )}
         {isExcluded && (
           <View style={[styles.excludeBadge, { backgroundColor: accent }]}>
             <Text style={styles.excludeBadgeText}>↺</Text>
