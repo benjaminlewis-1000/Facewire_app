@@ -39,6 +39,17 @@ export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
 
+  // Bearer token for <Image>'s `source.headers` -- face/source image
+  // requests go through KeyedImageView's unauthenticated access_key path
+  // unless we attach this, and that path is now tightly rate-limited
+  // (2/min) server-side. Refreshed whenever a new instance loads (cheap:
+  // getValidIdToken only hits the network if the cached token is close
+  // to expiry). `Image.prefetch` can't carry headers at all, so it's not
+  // used for these URLs any more -- the real <Image> tags do the only
+  // fetching, authenticated, and rely on native image-cache dedup.
+  const [idToken, setIdToken] = useState(null);
+  const imageHeaders = idToken ? { Authorization: `Bearer ${idToken}` } : undefined;
+
   // UI states
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [isLoadingContent, setIsLoadingContent] = useState(true);
@@ -145,8 +156,9 @@ export default function App() {
     setCurrentImage(data.face_img_url || placeholderImages[0]);
     setButtonNames(Array.isArray(data.names) ? data.names.map((i) => i.name) : []);
     setCurrentSourceImage(data.source_img_url || null);
-    // Preload the full-size source now so the zoom modal opens instantly.
-    if (data.source_img_url) Image.prefetch(data.source_img_url);
+    // Keep the bearer token current for the <Image> tags' auth headers
+    // (cheap -- only refreshes over the network if actually near expiry).
+    getValidIdToken().then(setIdToken).catch(() => {});
   };
 
   /**
@@ -230,9 +242,12 @@ export default function App() {
   };
 
   /**
-   * Background-fetch instance data (and warm the image cache) for the
-   * next `prefetchCount` faces after `fromIndex`, in parallel, skipping
-   * any already cached, in flight, or known to be resolved elsewhere.
+   * Background-fetch instance data for the next `prefetchCount` faces
+   * after `fromIndex`, in parallel, skipping any already cached, in
+   * flight, or known to be resolved elsewhere. Doesn't warm the image
+   * cache -- `Image.prefetch` can't attach the auth header these URLs
+   * now require (see `imageHeaders`), so the actual <Image> tags are
+   * the only thing fetching them.
    */
   const warmPrefetchCache = (ids, fromIndex) => {
     let queued = 0;
@@ -242,19 +257,19 @@ export default function App() {
       queued += 1;
       if (instanceCache.current.has(id)) continue;
       // fetchUnlabeledInstanceData dedupes in-flight requests internally.
-      fetchUnlabeledInstanceData(id, { display: false, allowCache: false })
-        .then((data) => {
-          if (data && data.face_img_url) Image.prefetch(data.face_img_url);
-          // Warm the full-size source image too, so tap-to-zoom is instant.
-          if (data && data.source_img_url) Image.prefetch(data.source_img_url);
-        })
-        .catch(() => {});
+      fetchUnlabeledInstanceData(id, { display: false, allowCache: false }).catch(() => {});
     }
   };
 
   // LoginScreen owns startup auth (biometric gate + silent token
   // refresh from the stored OIDC refresh token), so App just renders it
   // until it reports success.
+  // Prime the image-auth header as soon as we're logged in, so the very
+  // first face image doesn't go out unauthenticated.
+  useEffect(() => {
+    if (isLoggedIn) getValidIdToken().then(setIdToken).catch(() => {});
+  }, [isLoggedIn]);
+
   useEffect(() => {
     setIsLoadingAuth(false);
     AsyncStorage.getItem('pv_prefetch_count').then((v) => {
@@ -901,7 +916,7 @@ export default function App() {
             style={styles.imageTouchable} // Ensure touchable area covers image
           >
             <Image
-              source={{ uri: currentImage }} // Set the image source from state
+              source={{ uri: currentImage, headers: imageHeaders }} // Set the image source from state
               style={styles.image}
               resizeMode="contain" // Ensures the entire image is visible within its container
               // Optional: Add an onError handler for debugging image loading issues
@@ -1192,7 +1207,7 @@ export default function App() {
             <>
             <View style={styles.imageTouchable}>
              <ImageZoom
-                uri={ currentSourceImage }
+                source={{ uri: currentSourceImage, headers: imageHeaders }}
                 style={styles.fullScreenImage}
                 onError={(e) => console.log('Source image loading error:', e.nativeEvent.error)}
                 isDoubleTapEnabled={true}

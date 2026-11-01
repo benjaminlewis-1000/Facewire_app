@@ -10,6 +10,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getValidIdToken } from './auth';
 
 const { width, height } = Dimensions.get('window');
 export const COLS = 3;
@@ -111,6 +112,16 @@ const ReviewGrid = ({
 }) => {
   const insets = useSafeAreaInsets();
 
+  // Chip images go through KeyedImageView's access_key path, which is now
+  // tightly rate-limited unless the request is authenticated -- attach
+  // the same bearer token authedFetch uses. Refreshed whenever a new
+  // screenful of faces arrives (cheap unless actually near expiry).
+  const [idToken, setIdToken] = useState(null);
+  useEffect(() => {
+    if (visible) getValidIdToken().then(setIdToken).catch(() => {});
+  }, [visible, faces]);
+  const imageHeaders = idToken ? { Authorization: `Bearer ${idToken}` } : undefined;
+
   // Measure the real height available for the grid, then pick a row count
   // (rounded -- a row that almost fits still shows) and shrink the chips
   // just enough that that many rows fit with no scroll.
@@ -131,7 +142,7 @@ const ReviewGrid = ({
         onPress={() => onToggle(item.id)}
       >
         <Image
-          source={{ uri: item.face_img_url }}
+          source={{ uri: item.face_img_url, headers: imageHeaders }}
           style={[styles.chipImage, isExcluded && styles.chipImageExcluded]}
           resizeMode="cover"
         />
