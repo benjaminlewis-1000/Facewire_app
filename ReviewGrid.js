@@ -118,7 +118,15 @@ const ReviewGrid = ({
   // screenful of faces arrives (cheap unless actually near expiry).
   const [idToken, setIdToken] = useState(null);
   useEffect(() => {
-    if (visible) getValidIdToken().then(setIdToken).catch((e) => console.warn('image auth token fetch failed:', e?.message));
+    console.log('ReviewGrid idToken effect firing, visible=', visible, 'faces.length=', faces.length);
+    if (visible) {
+      getValidIdToken()
+        .then((t) => {
+          console.log('ReviewGrid idToken resolved, length=', t ? t.length : 0);
+          setIdToken(t);
+        })
+        .catch((e) => console.warn('image auth token fetch failed:', e?.message));
+    }
   }, [visible, faces]);
   const imageHeaders = idToken ? { Authorization: `Bearer ${idToken}` } : undefined;
 
@@ -135,6 +143,11 @@ const ReviewGrid = ({
 
   const renderChip = ({ item }) => {
     const isExcluded = excluded.has(item.id);
+    console.log(
+      'renderChip', item.id,
+      'idToken?', !!idToken,
+      'headers?', JSON.stringify(imageHeaders)
+    );
     return (
       <TouchableOpacity
         style={[styles.chip, { width: chip, height: chip }]}
