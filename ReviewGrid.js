@@ -5,7 +5,6 @@ import {
   Text,
   Image,
   TouchableOpacity,
-  FlatList,
   ActivityIndicator,
   Dimensions,
 } from 'react-native';
@@ -31,6 +30,12 @@ export const PAGE_LIMIT =
 // big each chip should be. We ROUND the row count (so a row that almost
 // fits still gets shown) and then shrink the chips just enough to make
 // that many rows fit with no scroll.
+const chunk = (arr, size) => {
+  const out = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+};
+
 const layoutFor = (h) => {
   const usable = h - GRID_PADDING * 2;
   const rows = Math.max(3, Math.round((usable + GRID_GAP) / (CHIP_SIZE + GRID_GAP)));
@@ -118,17 +123,19 @@ const ReviewGrid = ({
   // screenful of faces arrives (cheap unless actually near expiry).
   const [idToken, setIdToken] = useState(null);
   useEffect(() => {
-    console.log('ReviewGrid idToken effect firing, visible=', visible, 'faces.length=', faces.length);
     if (visible) {
       getValidIdToken()
-        .then((t) => {
-          console.log('ReviewGrid idToken resolved, length=', t ? t.length : 0);
-          setIdToken(t);
-        })
+        .then(setIdToken)
         .catch((e) => console.warn('image auth token fetch failed:', e?.message));
     }
   }, [visible, faces]);
   const imageHeaders = idToken ? { Authorization: `Bearer ${idToken}` } : undefined;
+
+  // TEMP DIAGNOSTIC (2026-11-04): can't reach adb/Metro remotely, so surface
+  // the same state an on-screen line instead of console.log. Remove once
+  // the grid auth bug is root-caused.
+  const [loadedCount, setLoadedCount] = useState(0);
+  const [erroredCount, setErroredCount] = useState(0);
 
   // Measure the real height available for the grid, then pick a row count
   // (rounded -- a row that almost fits still shows) and shrink the chips
@@ -141,15 +148,11 @@ const ReviewGrid = ({
     if (gridH > 0 && onCapacity) onCapacity(rows * COLS);
   }, [gridH, rows, onCapacity]);
 
-  const renderChip = ({ item }) => {
+  const renderChip = (item) => {
     const isExcluded = excluded.has(item.id);
-    console.log(
-      'renderChip', item.id,
-      'idToken?', !!idToken,
-      'headers?', JSON.stringify(imageHeaders)
-    );
     return (
       <TouchableOpacity
+        key={item.id}
         style={[styles.chip, { width: chip, height: chip }]}
         activeOpacity={0.8}
         onPress={() => onToggle(item.id)}
@@ -165,8 +168,8 @@ const ReviewGrid = ({
             source={[{ uri: item.face_img_url, headers: imageHeaders }]}
             style={[styles.chipImage, isExcluded && styles.chipImageExcluded]}
             resizeMode="cover"
-            onError={(e) => console.log('Chip image error:', item.face_img_url, e.nativeEvent.error)}
-            onLoad={() => console.log('Chip image OK:', item.face_img_url)}
+            onError={() => setErroredCount((n) => n + 1)}
+            onLoad={() => setLoadedCount((n) => n + 1)}
           />
         )}
         {isExcluded && (
@@ -193,6 +196,11 @@ const ReviewGrid = ({
         </View>
         <View style={styles.metaRow}>{meta}</View>
         <Text style={styles.hint} numberOfLines={1}>{hint}</Text>
+        <Text style={styles.debugLine} numberOfLines={2}>
+          DEBUG token={idToken ? `len${idToken.length}` : 'null'} headers=
+          {imageHeaders ? JSON.stringify(imageHeaders).slice(0, 40) : 'none'} loaded={loadedCount}
+          err={erroredCount}/{faces.length}
+        </Text>
 
         <View
           style={styles.gridArea}
@@ -208,22 +216,20 @@ const ReviewGrid = ({
               <Text style={styles.emptyBody}>{error || emptyBody}</Text>
             </View>
           ) : (
-            <FlatList
-              data={faces}
-              extraData={excluded}
-              renderItem={renderChip}
-              keyExtractor={(item) => String(item.id)}
-              numColumns={COLS}
-              scrollEnabled={false}
-              // scrollEnabled doesn't turn off virtualization -- FlatList
-              // still only renders `initialNumToRender` (default 10)
-              // items up front, and with scrolling disabled there's no
-              // way to trigger the rest. Since this grid never scrolls,
-              // just render the whole (already-capped-by-layoutFor) list.
-              initialNumToRender={faces.length}
-              contentContainerStyle={styles.grid}
-              columnWrapperStyle={styles.gridRow}
-            />
+            // Plain chunked grid, not FlatList: this screen never scrolls
+            // (scrollEnabled={false} was already set), so FlatList's
+            // virtualization/column-wrapping bought nothing -- and it's
+            // the one structural difference between this (broken: every
+            // chip request arrives with no Authorization header) and the
+            // main screen's plain-sibling <Image>s (working). Removing it
+            // rules that mechanism in or out.
+            <View style={styles.grid}>
+              {chunk(faces, COLS).map((row, i) => (
+                <View style={styles.gridRow} key={i}>
+                  {row.map((item) => renderChip(item))}
+                </View>
+              ))}
+            </View>
           )}
         </View>
 
@@ -283,12 +289,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 20,
   },
+  debugLine: {
+    fontSize: 10,
+    color: '#C0392B',
+    textAlign: 'center',
+    paddingHorizontal: 8,
+    backgroundColor: '#fff3cd',
+  },
   gridArea: { flex: 1 },
   centerFill: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   emptyTitle: { fontSize: 20, fontWeight: 'bold', color: '#333', marginBottom: 8 },
   emptyBody: { fontSize: 15, color: '#666', textAlign: 'center' },
   grid: { padding: GRID_PADDING },
-  gridRow: { gap: GRID_GAP, marginBottom: GRID_GAP },
+  gridRow: { flexDirection: 'row', gap: GRID_GAP, marginBottom: GRID_GAP },
   chip: {
     borderRadius: 10,
     overflow: 'hidden',
