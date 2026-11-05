@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  TEMP DIAGNOSTIC (2026-11-05): lets mitmproxy inspect this app's HTTPS
+  traffic by trusting user-installed (not just system) CA certs. Needed to
+  directly observe whether the grid's face_array requests actually carry
+  an Authorization header -- every code-level theory has been ruled out.
+  Remove once the grid image-auth bug is root-caused.
+-->
+<network-security-config>
+  <base-config>
+    <trust-anchors>
+      <certificates src="system" />
+      <certificates src="user" />
+    </trust-anchors>
+  </base-config>
+</network-security-config>
