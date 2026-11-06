@@ -64,6 +64,9 @@ const layoutFor = (h) => {
  *                    banner (e.g. "~N left" + Skip person); the row is
  *                    always reserved even when this is null
  *   faces            [{ id, face_img_url }] currently on screen
+ *   prefetchUrls     face_img_urls to warm into the native image cache
+ *                    ahead of time (e.g. useReviewQueue's buffered,
+ *                    not-yet-shown faces), via a hidden authenticated pool
  *   excluded         Set of flagged face ids
  *   onToggle(id)
  *   loading          true when there's nothing to show yet (full spinner)
@@ -102,6 +105,7 @@ const ReviewGrid = ({
   hint,
   meta = null,
   faces = [],
+  prefetchUrls = [],
   excluded,
   onToggle,
   loading,
@@ -158,6 +162,11 @@ const ReviewGrid = ({
   };
 
   if (!visible) return null;
+
+  // Don't double-mount an <Image> for a URL already rendered as a real,
+  // visible chip above.
+  const shownUrls = new Set(faces.map((f) => f.face_img_url));
+  const hiddenPrefetchUrls = prefetchUrls.filter((u) => !shownUrls.has(u));
 
   return (
       <View
@@ -222,11 +231,24 @@ const ReviewGrid = ({
             </Text>
           </TouchableOpacity>
         </View>
+
+        {/* Hidden prefetch pool: warms the native image cache for faces
+            buffered ahead of what's currently shown, so advancing to the
+            next screenful (or two) doesn't show a visible pop-in. A real
+            <Image>, not Image.prefetch, so it can carry the auth header
+            these URLs require. */}
+        <View style={styles.offscreenPrefetchPool} pointerEvents="none">
+          {idToken && hiddenPrefetchUrls.map((uri) => (
+            <Image key={uri} source={authedSource(uri, idToken)} style={styles.offscreenPrefetchImg} />
+          ))}
+        </View>
       </View>
   );
 };
 
 const styles = StyleSheet.create({
+  offscreenPrefetchPool: { position: 'absolute', top: -1000, left: -1000, width: 1, height: 1, overflow: 'hidden' },
+  offscreenPrefetchImg: { width: 1, height: 1 },
   container: {
     // Fills the window as a flex child (same as the label screen), so the
     // footer pins to the true bottom. paddingTop is supplied inline

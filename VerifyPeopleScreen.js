@@ -138,6 +138,7 @@ const VerifyPeopleScreen = ({ visible, onClose }) => {
         }
         meta={meta}
         faces={q.faces}
+        prefetchUrls={q.prefetchUrls}
         excluded={q.excluded}
         onToggle={q.toggle}
         onCapacity={setPageSize}

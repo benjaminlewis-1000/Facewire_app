@@ -58,6 +58,7 @@ const VerifyIgnoreScreen = ({ visible, onClose }) => {
           : 'Tap real people to send them back for reprocessing.'
       }
       faces={q.faces}
+      prefetchUrls={q.prefetchUrls}
       excluded={q.excluded}
       onToggle={q.toggle}
       onCapacity={setPageSize}

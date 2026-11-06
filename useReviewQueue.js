@@ -23,10 +23,12 @@ import { PAGE_LIMIT } from './ReviewGrid';
  *   submitUrl        the bulk-action endpoint
  *   onPage(meta)     optional; runs after each fetch with that fetch's meta
  *
- * Returns { faces, excluded, toggle, loading, busy, cooldown, error, submit,
- * reload, setError, canUndo, undoing, beginUndo, cancelUndo, submitUndo }.
- * `submit` returns true once the write landed (so callers with their own
- * running totals only advance them on success).
+ * Returns { faces, excluded, toggle, loading, busy, cooldown, error,
+ * prefetchUrls, submit, reload, setError, canUndo, undoing, beginUndo,
+ * cancelUndo, submitUndo }. `submit` returns true once the write landed
+ * (so callers with their own running totals only advance them on success).
+ * `prefetchUrls` is every buffered-but-not-shown face's image URL --
+ * pass it straight through to <ReviewGrid prefetchUrls={...}>.
  *
  * UNDO LAST SCREEN: after a submit the just-handled screenful is stashed.
  * `beginUndo()` re-shows it (tap the faces that shouldn't have gone
@@ -66,12 +68,22 @@ export default function useReviewQueue({
   const [undoing, setUndoing] = useState(false);
   const [error, setError] = useState('');
 
+  // URLs of every buffered-but-not-yet-submitted face (current screenful
+  // plus however much is stocked ahead) -- ReviewGrid mounts these in a
+  // hidden, authenticated <Image> pool so upcoming screenfuls are already
+  // warm in the native image cache by the time the reviewer gets there.
+  const [prefetchUrls, setPrefetchUrls] = useState([]);
+
   const seen = useRef(new Set());
   const bufferRef = useRef([]);
   const inFlightRef = useRef(null);
   const submitLockRef = useRef(false);
   const cooldownTimerRef = useRef(null);
   const prevFacesRef = useRef(null); // last submitted screenful (for undo)
+
+  const syncPrefetch = useCallback(() => {
+    setPrefetchUrls(bufferRef.current.map((f) => f.face_img_url));
+  }, []);
   const lastSubmitRef = useRef(null); // that submit's in-flight PATCH promise
 
   const armCooldown = useCallback(() => {
@@ -103,6 +115,7 @@ export default function useReviewQueue({
         // This was the actual cause of the grid's 429s, not anything in
         // ReviewGrid.js itself.
         bufferRef.current = bufferRef.current.concat(fresh);
+        syncPrefetch();
         if (onPage) onPage(meta);
         return fresh.length;
       } catch (e) {
@@ -118,7 +131,7 @@ export default function useReviewQueue({
       }
     })();
     return inFlightRef.current;
-  }, [fetchPage, onPage]);
+  }, [fetchPage, onPage, syncPrefetch]);
 
   const showWindow = useCallback(() => {
     setFaces(bufferRef.current.slice(0, page));
@@ -143,14 +156,19 @@ export default function useReviewQueue({
     [topUp]
   );
 
+  // Buffer target: the current screenful plus two more ahead, so
+  // advancing twice in a row still has the images already warm.
+  const AHEAD_SCREENS = 3; // current + 2 ahead
+
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     bufferRef.current = [];
     seen.current = new Set();
-    await fill(page * 2);
+    await fill(page * 2); // enough to paint fast; don't block on the 3rd screen
     showWindow();
     setLoading(false);
+    if (bufferRef.current.length < page * AHEAD_SCREENS) fill(page * AHEAD_SCREENS);
   }, [fill, showWindow, page]);
 
   useEffect(() => {
@@ -162,7 +180,7 @@ export default function useReviewQueue({
   useEffect(() => {
     if (loading) return;
     setFaces(bufferRef.current.slice(0, page));
-    if (bufferRef.current.length < page * 2) fill(page * 2);
+    if (bufferRef.current.length < page * AHEAD_SCREENS) fill(page * AHEAD_SCREENS);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
@@ -204,6 +222,7 @@ export default function useReviewQueue({
         });
 
       bufferRef.current = bufferRef.current.slice(consumed);
+      syncPrefetch();
       if (bufferRef.current.length === 0) {
         // Nothing buffered (e.g. moved past this person) -> must fetch.
         setBusy(true);
@@ -212,13 +231,13 @@ export default function useReviewQueue({
         setBusy(false);
       } else {
         showWindow(); // instant
-        if (bufferRef.current.length < page * 2) fill(page * 2); // bg top-up
       }
+      if (bufferRef.current.length < page * AHEAD_SCREENS) fill(page * AHEAD_SCREENS); // bg top-up
       return true;
     } finally {
       submitLockRef.current = false;
     }
-  }, [loading, cooldown, undoing, faces, excluded, buildBody, submitUrl, fill, showWindow, page]);
+  }, [loading, cooldown, undoing, faces, excluded, buildBody, submitUrl, fill, showWindow, page, syncPrefetch]);
 
   // ---- Undo last screen -------------------------------------------------
   // Only meaningful once a forward submit has stashed a screenful, and not
@@ -292,6 +311,7 @@ export default function useReviewQueue({
     busy,
     cooldown,
     error,
+    prefetchUrls,
     submit,
     reload: load,
     setError,

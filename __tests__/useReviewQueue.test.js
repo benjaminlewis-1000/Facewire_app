@@ -5,7 +5,6 @@ jest.mock('../ReviewGrid', () => ({ PAGE_LIMIT: 6 }));
 jest.mock('../auth', () => ({ authedFetch: jest.fn() }));
 
 import { authedFetch } from '../auth';
-import { Image } from 'react-native';
 import useReviewQueue from '../useReviewQueue';
 
 const mkFaces = (n, from = 1) =>
@@ -42,8 +41,6 @@ const baseProps = (over = {}) => ({
 
 beforeEach(() => {
   jest.clearAllMocks();
-  if (!Image.prefetch) Image.prefetch = jest.fn();
-  jest.spyOn(Image, 'prefetch').mockResolvedValue(true);
   authedFetch.mockResolvedValue({ ok: true, status: 200 });
 });
 
@@ -82,7 +79,10 @@ test('submit sends untapped faces as keep, tapped faces as flag', async () => {
 });
 
 test('submit advances to the next buffered page with no extra fetch', async () => {
-  const props = baseProps();
+  // Buffer target is now 3 screenfuls (current + 2 ahead, for prefetch-
+  // ahead) -- stock the mock batch well above that so one submit still
+  // leaves enough buffered to need no top-up at all.
+  const props = baseProps({ fetchPage: jest.fn(async () => ({ faces: mkFaces(30) })) });
   await mount(props);
   props.fetchPage.mockClear();
 
@@ -92,8 +92,23 @@ test('submit advances to the next buffered page with no extra fetch', async () =
 
   expect(latest.faces.map((f) => f.id)).toEqual([7, 8, 9, 10, 11, 12]);
   expect(latest.loading).toBe(false);
-  // Buffer still had 14 left -> no refetch, only the PATCH.
+  // Buffer still had 24 left (>= page*3 = 18) -> no refetch, only the PATCH.
   expect(props.fetchPage).not.toHaveBeenCalled();
+});
+
+test('submit triggers a background top-up once the buffer dips below the prefetch-ahead target', async () => {
+  // page=6, AHEAD_SCREENS=3 -> target 18. One submit against a 20-face
+  // buffer leaves 14, which should kick off a non-blocking top-up so the
+  // next page and a half stay prefetched.
+  const props = baseProps();
+  await mount(props);
+  props.fetchPage.mockClear();
+
+  await act(async () => {
+    await latest.submit();
+  });
+
+  expect(props.fetchPage).toHaveBeenCalled();
 });
 
 test('submit clears the excluded set for the new page', async () => {

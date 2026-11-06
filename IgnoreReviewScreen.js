@@ -67,6 +67,7 @@ const IgnoreReviewScreen = ({ visible, onClose }) => {
           : "Tap any you don't want to decide on — it won't show here again."
       }
       faces={q.faces}
+      prefetchUrls={q.prefetchUrls}
       excluded={q.excluded}
       onToggle={q.toggle}
       onCapacity={setPageSize}
