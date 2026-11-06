@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Image } from 'react-native';
 
 import { authedFetch } from './auth';
 import { PAGE_LIMIT } from './ReviewGrid';
@@ -95,8 +94,14 @@ export default function useReviewQueue({
         const fresh = batch.filter((f) => !have.has(f.id));
         fresh.forEach((f) => {
           seen.current.add(f.id);
-          Image.prefetch(f.face_img_url);
         });
+        // No Image.prefetch here: it can't carry the Authorization header
+        // these URLs now require, and -- worse -- firing it unauthenticated
+        // for a URL that ReviewGrid's own <Image> will request a moment
+        // later (with headers) lets Android's native image cache coalesce
+        // the two, silently stripping the header from the real request.
+        // This was the actual cause of the grid's 429s, not anything in
+        // ReviewGrid.js itself.
         bufferRef.current = bufferRef.current.concat(fresh);
         if (onPage) onPage(meta);
         return fresh.length;
