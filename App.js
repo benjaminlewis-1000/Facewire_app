@@ -16,6 +16,7 @@ const SCREEN_TOAST = {
   ignore_review: 'Confirming ignored face guesses',
 };
 import { authedFetch, signOut, lockSession, getValidIdToken, API_BASE } from './auth';
+import { useAuthedIdToken, authedSource } from './imageAuth';
 import { firstCheckIndex, pruneAndLocate, frontierAfterRemoval } from './queueLogic';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -42,13 +43,10 @@ export default function App() {
   // Bearer token for <Image>'s `source.headers` -- face/source image
   // requests go through KeyedImageView's unauthenticated access_key path
   // unless we attach this, and that path is now tightly rate-limited
-  // (2/min) server-side. Refreshed whenever a new instance loads (cheap:
-  // getValidIdToken only hits the network if the cached token is close
-  // to expiry). `Image.prefetch` can't carry headers at all, so it's not
-  // used for these URLs any more -- the real <Image> tags do the only
-  // fetching, authenticated, and rely on native image-cache dedup.
-  const [idToken, setIdToken] = useState(null);
-  const imageHeaders = idToken ? { Authorization: `Bearer ${idToken}` } : undefined;
+  // (2/min) server-side. Primed on login; applyInstanceToUi also refreshes
+  // it per-instance (cheap: getValidIdToken only hits the network if the
+  // cached token is close to expiry).
+  const [idToken, setIdToken] = useAuthedIdToken(isLoggedIn);
 
   // Image URLs for the next `prefetchCount` upcoming faces, warmed into
   // the native image cache by mounting them off-screen (see the hidden
@@ -269,7 +267,7 @@ export default function App() {
    * already cached, in flight, or known to be resolved elsewhere. Image
    * warming mounts the URLs off-screen (`prefetchUrls` / the hidden pool)
    * rather than using `Image.prefetch`, which can't carry the auth header
-   * these URLs now require (see `imageHeaders`).
+   * these URLs now require (see `authedSource` in imageAuth.js).
    */
   const warmPrefetchCache = (ids, fromIndex) => {
     let queued = 0;
@@ -290,12 +288,9 @@ export default function App() {
 
   // LoginScreen owns startup auth (biometric gate + silent token
   // refresh from the stored OIDC refresh token), so App just renders it
-  // until it reports success.
-  // Prime the image-auth header as soon as we're logged in, so the very
-  // first face image doesn't go out unauthenticated.
-  useEffect(() => {
-    if (isLoggedIn) getValidIdToken().then(setIdToken).catch((e) => console.warn('image auth token fetch failed:', e?.message));
-  }, [isLoggedIn]);
+  // until it reports success. useAuthedIdToken above primes the
+  // image-auth header as soon as we're logged in, so the very first face
+  // image doesn't go out unauthenticated.
 
   useEffect(() => {
     setIsLoadingAuth(false);
@@ -947,11 +942,7 @@ export default function App() {
             style={styles.imageTouchable} // Ensure touchable area covers image
           >
             <Image
-              // Array form, not a bare {uri, headers} object: RN Android's
-              // Image.android.js only wires source.headers into the
-              // native props on the array branch -- a plain object
-              // source silently drops headers entirely.
-              source={[{ uri: currentImage, headers: imageHeaders }]}
+              source={authedSource(currentImage, idToken)}
               style={styles.image}
               resizeMode="contain" // Ensures the entire image is visible within its container
               // Optional: Add an onError handler for debugging image loading issues
@@ -1243,7 +1234,7 @@ export default function App() {
             <>
             <View style={styles.imageTouchable}>
              <ImageZoom
-                source={[{ uri: currentSourceImage, headers: imageHeaders }]}
+                source={authedSource(currentSourceImage, idToken)}
                 style={styles.fullScreenImage}
                 onError={(e) => console.log('Source image loading error:', e.nativeEvent.error)}
                 isDoubleTapEnabled={true}
@@ -1341,7 +1332,7 @@ export default function App() {
         require. */}
     <View style={styles.offscreenPrefetchPool} pointerEvents="none">
       {idToken && prefetchUrls.map((uri) => (
-        <Image key={uri} source={[{ uri, headers: imageHeaders }]} style={styles.offscreenPrefetchImg} />
+        <Image key={uri} source={authedSource(uri, idToken)} style={styles.offscreenPrefetchImg} />
       ))}
     </View>
 

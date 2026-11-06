@@ -9,7 +9,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getValidIdToken } from './auth';
+import { useAuthedIdToken, authedSource } from './imageAuth';
 
 const { width, height } = Dimensions.get('window');
 export const COLS = 3;
@@ -118,24 +118,8 @@ const ReviewGrid = ({
   const insets = useSafeAreaInsets();
 
   // Chip images go through KeyedImageView's access_key path, which is now
-  // tightly rate-limited unless the request is authenticated -- attach
-  // the same bearer token authedFetch uses. Refreshed whenever a new
-  // screenful of faces arrives (cheap unless actually near expiry).
-  const [idToken, setIdToken] = useState(null);
-  useEffect(() => {
-    if (visible) {
-      getValidIdToken()
-        .then(setIdToken)
-        .catch((e) => console.warn('image auth token fetch failed:', e?.message));
-    }
-  }, [visible, faces]);
-  const imageHeaders = idToken ? { Authorization: `Bearer ${idToken}` } : undefined;
-
-  // TEMP DIAGNOSTIC (2026-11-04): can't reach adb/Metro remotely, so surface
-  // the same state an on-screen line instead of console.log. Remove once
-  // the grid auth bug is root-caused.
-  const [loadedCount, setLoadedCount] = useState(0);
-  const [erroredCount, setErroredCount] = useState(0);
+  // tightly rate-limited unless the request is authenticated.
+  const [idToken] = useAuthedIdToken(visible);
 
   // Measure the real height available for the grid, then pick a row count
   // (rounded -- a row that almost fits still shows) and shrink the chips
@@ -157,19 +141,11 @@ const ReviewGrid = ({
         activeOpacity={0.8}
         onPress={() => onToggle(item.id)}
       >
-        {idToken && (
-          // Wait on idToken before mounting: an <Image> that fires before
-          // the auth header is ready gets 429'd and never retries -- RN
-          // only reloads on a `source.uri` change, not a headers-only one.
-          // Array form, not a bare {uri, headers} object: RN Android's
-          // Image.android.js only wires source.headers into native props
-          // on the array branch -- a plain object source drops them.
+        {authedSource(item.face_img_url, idToken) && (
           <Image
-            source={[{ uri: item.face_img_url, headers: imageHeaders }]}
+            source={authedSource(item.face_img_url, idToken)}
             style={[styles.chipImage, isExcluded && styles.chipImageExcluded]}
             resizeMode="cover"
-            onError={() => setErroredCount((n) => n + 1)}
-            onLoad={() => setLoadedCount((n) => n + 1)}
           />
         )}
         {isExcluded && (
@@ -196,11 +172,6 @@ const ReviewGrid = ({
         </View>
         <View style={styles.metaRow}>{meta}</View>
         <Text style={styles.hint} numberOfLines={1}>{hint}</Text>
-        <Text style={styles.debugLine} numberOfLines={2}>
-          DEBUG token={idToken ? `len${idToken.length}` : 'null'} headers=
-          {imageHeaders ? JSON.stringify(imageHeaders).slice(0, 40) : 'none'} loaded={loadedCount}
-          err={erroredCount}/{faces.length}
-        </Text>
 
         <View
           style={styles.gridArea}
@@ -288,13 +259,6 @@ const styles = StyleSheet.create({
     color: '#888',
     textAlign: 'center',
     paddingHorizontal: 20,
-  },
-  debugLine: {
-    fontSize: 10,
-    color: '#C0392B',
-    textAlign: 'center',
-    paddingHorizontal: 8,
-    backgroundColor: '#fff3cd',
   },
   gridArea: { flex: 1 },
   centerFill: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
