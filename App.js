@@ -596,9 +596,30 @@ export default function App() {
     commitChoice(() => sendPatchRequest(d.ignore_url, d.ignore_payload));
   };
 
-  const chooseNoneOfTheAbove = () => {
+  // "None of the above" -- decline every candidate currently proposed for
+  // this face (not a full reset: the backend records each declined name
+  // so the classifier won't just re-propose the same people next time).
+  const chooseNoneOfTheAbove = async () => {
+    if (isLoadingContent || actionLock.current) return;
     const grp = groups[groupIndex];
-    if (grp) resetFaceAndDrop(grp.viewIndex);
+    const faceId = grp ? grp.faceIds[grp.viewIndex] : null;
+    if (faceId == null) return;
+    actionLock.current = true;
+    setActionError('');
+    setIsLoadingContent(true);
+    try {
+      const ok = await sendPatchRequest(`${API_BASE}/mobile/reject_proposed/${faceId}/`, null);
+      if (!ok) {
+        setActionError("Couldn't save that — tap ‹ to retry.");
+        return;
+      }
+      await removeCurrentFace(grp.viewIndex);
+    } catch (e) {
+      console.error('Error rejecting proposed names:', e);
+    } finally {
+      setIsLoadingContent(false);
+      actionLock.current = false;
+    }
   };
 
   // Skip: hide this face from the mobile queue (persisted server-side via

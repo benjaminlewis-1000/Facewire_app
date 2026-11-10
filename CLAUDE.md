@@ -28,7 +28,8 @@ PhotoVerify is a single-screen Expo mobile app for human review of face-recognit
 
 All requests go to `https://picasa.exploretheworld.tech` (a Django REST backend). Auth header format is **`Authorization: JWT <token>`** (not `Bearer`). Key endpoints beyond the three above:
 
-- `GET /api/mobile/unlabeled_instance/{id}/` — detail for one review item. Response drives the whole screen: `face_img_url`, `source_img_url`, `names[]`, plus per-name action URLs (`confirm_patch_url` + `confirm_patch_data`, `disassociate_patch_url`) and instance-level `ignore_url` + `ignore_payload`.
+- `GET /api/mobile/unlabeled_instance/{id}/` — detail for one review item. Response drives the whole screen: `face_img_url`, `source_img_url`, `names[]` (each with `confirm_patch_url` + `confirm_patch_data`), plus instance-level `ignore_url` + `ignore_payload`.
+- `PATCH /api/mobile/reject_proposed/{id}/` — decline every name currently proposed for this face at once (the backend reads the candidates off the face itself, not from the request body). Used by "None of the above".
 - `POST /api/token/refresh/` — token refresh.
 
 **HATEOAS-style actions:** the client does not construct action URLs. Each instance-detail response embeds the exact URL + payload for every action (confirm a name, disassociate a name, ignore the person). Review actions are always `PATCH`. See `handleProcessAction` in `App.js`.
@@ -43,7 +44,7 @@ Every authenticated request in `App.js` (`sendPatchRequest`, `fetchUnlabeledInst
 - `currentUnlabeledInstanceIndex` — which item is on screen.
 - `latestProcessedIndex` — how far the reviewer has advanced. When `currentUnlabeledInstanceIndex < latestProcessedIndex` the user is looking *back* at an already-handled item, and the UI swaps the name list / Skip / Verify / Ignore buttons for a single "Reset Face" button.
 - Selection is mutually exclusive: picking a name clears "Ignore person" and vice versa. "Verify" is enabled only when one of them is selected; "Skip" advances without a PATCH.
-- `"None of the above"` is appended to `buttonNames` client-side and, when chosen, fires a `disassociate_patch_url` PATCH for *every* name on the instance.
+- `"None of the above"` is appended to `buttonNames` client-side and, when chosen, fires one `reject_proposed` PATCH declining every proposed name on the instance (`chooseNoneOfTheAbove` in `App.js`) — distinct from `confirmUndoAssignment`'s full `/mobile/reset/` (which also wipes the proposals instead of just recording them declined).
 
 ### Known incomplete areas
 
